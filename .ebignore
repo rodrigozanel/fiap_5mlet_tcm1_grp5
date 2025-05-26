@@ -1,0 +1,83 @@
+# Arquivos de desenvolvimento
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git/
+.mypy_cache/
+.pytest_cache/
+.hypothesis/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Build e deploy local
+build.py
+docker-build.py
+docker-deploy.py
+deploy.py
+
+# Testes
+test_*.py
+run_all_tests.py
+detailed_test.py
+
+# Dados locais
+data/
+*.csv
+
+# Configurações locais
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Task Master
+tasks/
+scripts/
+.taskmasterconfig
+.roomodes
+.cursor/
+.roo/
+.windsurfrules
+
+# Postman
+postman_collection.json
+POSTMAN_GUIDE.md
+
+# Outros
+LICENSE
+*.md
+!README.md 

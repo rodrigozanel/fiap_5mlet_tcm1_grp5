@@ -176,3 +176,4 @@ tasks/
 # Compiled Python files
 __pycache__/
 *.pyc
+/.cursor/
