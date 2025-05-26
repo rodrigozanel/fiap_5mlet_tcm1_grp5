@@ -281,13 +281,44 @@ for endpoint, params in endpoints_examples.items():
     )
     
     if response.status_code == 200:
-        print(f"✅ {endpoint}: Dados obtidos com sucesso")
+        data = response.json()
+        cache_status = data.get('cached', 'unknown')
+        print(f"✅ {endpoint}: Dados obtidos com sucesso (cache: {cache_status})")
     else:
         print(f"❌ {endpoint}: Erro {response.status_code}")
+
+# Exemplo 5: Monitoramento de cache e performance
+import time
+
+def test_cache_performance():
+    """Demonstra o funcionamento do cache"""
+    
+    # Primeira requisição (dados frescos)
+    start_time = time.time()
+    response1 = requests.get('http://localhost:5000/producao?year=2023', auth=auth)
+    time1 = time.time() - start_time
+    
+    if response1.status_code == 200:
+        data1 = response1.json()
+        print(f"1ª requisição: {time1:.2f}s - Cache: {data1.get('cached', 'unknown')}")
+    
+    # Segunda requisição (cache hit)
+    start_time = time.time()
+    response2 = requests.get('http://localhost:5000/producao?year=2023', auth=auth)
+    time2 = time.time() - start_time
+    
+    if response2.status_code == 200:
+        data2 = response2.json()
+        print(f"2ª requisição: {time2:.2f}s - Cache: {data2.get('cached', 'unknown')}")
+        print(f"Melhoria de performance: {((time1 - time2) / time1 * 100):.1f}%")
+
+# Executar teste de performance
+test_cache_performance()
 ```
 
 ## Estrutura de Resposta
 
+### Resposta Padrão com Cache
 ```json
 {
   "data": {
@@ -306,9 +337,15 @@ for endpoint, params in endpoints_examples.items():
     "footer": [
       ["Total", "Valor Total"]
     ]
-  }
+  },
+  "cached": false
 }
 ```
+
+### Indicadores de Cache
+- `"cached": false` - Dados frescos obtidos via web scraping
+- `"cached": "short_term"` - Dados do cache de curto prazo (5 min)
+- `"cached": "fallback"` - Dados do cache de fallback (24h)
 
 ## Dependências Principais
 
@@ -317,6 +354,205 @@ for endpoint, params in endpoints_examples.items():
 - **BeautifulSoup4**: Parser HTML/XML
 - **Flask-HTTPAuth**: Autenticação HTTP Basic
 - **flasgger**: Documentação Swagger automática
+- **Redis**: Sistema de cache em memória
+
+## Sistema de Cache Inteligente
+
+A aplicação implementa um **sistema de cache de duas camadas** usando Redis para otimizar performance e garantir disponibilidade dos dados mesmo quando o site da Embrapa está indisponível.
+
+### Arquitetura do Cache
+
+#### 🚀 Cache de Curto Prazo (Short-term Cache)
+- **Finalidade**: Acelerar requisições frequentes
+- **TTL padrão**: 5 minutos (300 segundos)
+- **Prefixo**: `short:`
+- **Uso**: Dados recentes para evitar web scraping desnecessário
+
+#### 🛡️ Cache de Fallback (Fallback Cache)
+- **Finalidade**: Garantir disponibilidade quando o site fonte está indisponível
+- **TTL padrão**: 24 horas (86400 segundos)
+- **Prefixo**: `fallback:`
+- **Uso**: Dados de backup para situações de emergência
+
+### Fluxo de Funcionamento
+
+```mermaid
+graph TD
+    A[Requisição do Cliente] --> B{Cache Curto Prazo?}
+    B -->|HIT| C[Retorna dados do cache]
+    B -->|MISS| D[Tenta Web Scraping]
+    D -->|Sucesso| E[Armazena em ambos os caches]
+    D -->|Falha| F{Cache Fallback?}
+    F -->|HIT| G[Retorna dados do fallback]
+    F -->|MISS| H[Erro 500]
+    E --> I[Retorna dados frescos]
+```
+
+#### Estratégia de Cache por Requisição
+
+1. **Primeira tentativa**: Busca no cache de curto prazo
+   - Se encontrado: retorna imediatamente com `"cached": "short_term"`
+   
+2. **Segunda tentativa**: Web scraping do site da Embrapa
+   - Se bem-sucedido: armazena em ambos os caches e retorna com `"cached": false`
+   
+3. **Terceira tentativa**: Busca no cache de fallback
+   - Se encontrado: retorna dados antigos com `"cached": "fallback"`
+   - Se não encontrado: retorna erro 500
+
+### Configuração do Cache
+
+#### Variáveis de Ambiente
+```bash
+# Cache de curto prazo (em segundos)
+SHORT_CACHE_TTL=300          # 5 minutos (padrão)
+
+# Cache de fallback (em segundos)  
+FALLBACK_CACHE_TTL=86400     # 24 horas (padrão)
+
+# Configuração Redis (opcional)
+REDIS_HOST=localhost         # Host do Redis
+REDIS_PORT=6379             # Porta do Redis
+REDIS_DB=0                  # Database do Redis
+```
+
+#### Configuração Docker
+O Redis é automaticamente configurado via `docker-compose.yml`:
+```yaml
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    
+  app:
+    environment:
+      - SHORT_CACHE_TTL=300
+      - FALLBACK_CACHE_TTL=86400
+```
+
+### Chaves de Cache
+
+#### Formato das Chaves
+```
+{prefixo}{endpoint}:{hash_md5}
+```
+
+**Exemplos:**
+- `short:producao:a1b2c3d4e5f6...` - Cache curto para produção
+- `fallback:exportacao:f6e5d4c3b2a1...` - Cache fallback para exportação
+
+#### Geração de Hash
+O hash MD5 é gerado baseado em:
+- Nome do endpoint
+- Parâmetros da requisição (year, sub_option)
+- Ordenação consistente para garantir chaves únicas
+
+### Indicadores de Cache na Resposta
+
+Todas as respostas incluem o campo `cached` indicando a origem dos dados:
+
+```json
+{
+  "data": { ... },
+  "cached": false              // Dados frescos do web scraping
+}
+```
+
+```json
+{
+  "data": { ... },
+  "cached": "short_term"       // Dados do cache de curto prazo
+}
+```
+
+```json
+{
+  "data": { ... },
+  "cached": "fallback"         // Dados do cache de fallback
+}
+```
+
+### Monitoramento do Cache
+
+#### Via Endpoint Heartbeat
+```bash
+curl http://localhost:5000/heartbeat
+```
+
+**Resposta inclui informações do cache:**
+```json
+{
+  "cache": {
+    "redis_status": "connected",
+    "short_cache_ttl": 300,
+    "fallback_cache_ttl": 86400
+  }
+}
+```
+
+#### Status do Redis
+- `"connected"`: Redis disponível e funcionando
+- `"disconnected"`: Redis indisponível (cache desabilitado)
+
+### Vantagens do Sistema
+
+#### 🚀 Performance
+- **Redução de latência**: Dados em cache retornam instantaneamente
+- **Menos web scraping**: Evita requisições desnecessárias ao site da Embrapa
+- **Otimização de recursos**: Menor uso de CPU e rede
+
+#### 🛡️ Disponibilidade
+- **Tolerância a falhas**: Funciona mesmo se o site da Embrapa estiver fora do ar
+- **Dados históricos**: Cache de fallback mantém dados por 24 horas
+- **Graceful degradation**: Degrada graciosamente em caso de problemas
+
+#### 📊 Observabilidade
+- **Logs detalhados**: Registra hits/misses de cache
+- **Métricas de performance**: Tempo de resposta por fonte de dados
+- **Status em tempo real**: Monitoramento via endpoint heartbeat
+
+### Gerenciamento do Cache
+
+#### Limpeza Manual (se necessário)
+```bash
+# Conectar ao Redis via Docker
+docker exec -it fiap_5mlet_tcm1_grp5-redis-1 redis-cli
+
+# Listar chaves de cache
+KEYS short:*
+KEYS fallback:*
+
+# Limpar cache específico
+DEL short:producao:*
+DEL fallback:*
+
+# Limpar todo o cache
+FLUSHDB
+```
+
+#### Configuração de TTL Personalizada
+```bash
+# Cache mais agressivo (1 minuto)
+SHORT_CACHE_TTL=60
+
+# Cache de fallback mais longo (7 dias)
+FALLBACK_CACHE_TTL=604800
+```
+
+### Casos de Uso
+
+#### 🔄 Desenvolvimento
+- Cache curto para testes rápidos
+- Dados sempre atualizados
+
+#### 🏭 Produção
+- Cache otimizado para performance
+- Fallback para alta disponibilidade
+
+#### 🚨 Emergência
+- Site da Embrapa indisponível
+- API continua funcionando com dados em cache
 
 ## Versionamento Automático
 
