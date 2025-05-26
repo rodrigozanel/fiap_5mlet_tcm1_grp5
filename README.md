@@ -120,9 +120,7 @@ A aplicação estará disponível em: `http://localhost:5000`
 
 | Endpoint | Descrição | Autenticação |
 |----------|-----------|--------------|
-| `/` | Informações da API | ❌ Não requerida |
 | `/heartbeat` | Health check da API | ❌ Não requerida |
-| `/test` | Endpoint de teste | ❌ Não requerida |
 
 ### Documentação Swagger
 Acesse: `http://localhost:5000/apidocs/`
@@ -214,9 +212,6 @@ curl -u user1:password1 "http://localhost:5000/producao?sub_option=OPCAO_INEXIST
 
 # Health check da API (sem autenticação)
 curl "http://localhost:5000/heartbeat"
-
-# Informações da API (sem autenticação)
-curl "http://localhost:5000/"
 ```
 
 ### 2. Usando Python requests

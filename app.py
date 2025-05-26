@@ -193,43 +193,6 @@ def verify_password(username, password):
     return None
 
 
-@app.route("/", methods=["GET"])
-def home():
-    """
-    Página inicial da API.
-    ---
-    responses:
-      200:
-        description: Informações básicas da API.
-    """
-    return jsonify({
-        "message": "API Flask de Web Scraping - Dados Vitivinícolas Embrapa",
-        "version": "1.0.0",
-        "endpoints": [
-            "/producao",
-            "/processamento", 
-            "/comercializacao",
-            "/importacao",
-            "/exportacao"
-        ],
-        "health_check": "/heartbeat",
-        "test_endpoint": "/test",
-        "documentation": "/apidocs/",
-        "authentication": "HTTP Basic Auth required"
-    }), 200
-
-
-@app.route("/test", methods=["GET"])
-def test():
-    """
-    Endpoint de teste simples.
-    ---
-    responses:
-      200:
-        description: Teste bem-sucedido.
-    """
-    return jsonify({"status": "OK", "message": "API funcionando corretamente!"}), 200
-
 
 @app.route("/heartbeat", methods=["GET"])
 def heartbeat():
