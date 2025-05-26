@@ -1,0 +1,458 @@
+{
+	"info": {
+		"_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+		"name": "API Flask - Dados Vitivinícolas Embrapa",
+		"description": "Collection para testar a API Flask de Web Scraping que extrai dados vitivinícolas do site da Embrapa.\n\n## Funcionalidades:\n- 5 endpoints de dados (Produção, Processamento, Comercialização, Importação, Exportação)\n- Autenticação HTTP Basic\n- Filtros por ano e sub-opções\n- Parsing inteligente de tabelas HTML\n\n## Credenciais:\n- Usuário 1: user1 / password1\n- Usuário 2: user2 / password2\n\n## Base URL:\n- Local: http://localhost:5000\n\n## Parâmetros Opcionais:\n- year: Filtrar por ano específico (ex: 2023)\n- sub_option: Sub-opção para filtros adicionais",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Produção",
+			"item": [
+				{
+					"name": "Dados de Produção - Todos os Anos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/producao",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"producao"
+							]
+						},
+						"description": "Busca todos os dados de produção de uvas e vinhos sem filtros específicos."
+					},
+					"response": []
+				},
+				{
+					"name": "Dados de Produção - Filtrado por Ano",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/producao?year=2023",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"producao"
+							],
+							"query": [
+								{
+									"key": "year",
+									"value": "2023",
+									"description": "Ano para filtrar os dados"
+								}
+							]
+						},
+						"description": "Busca dados de produção filtrados por um ano específico."
+					},
+					"response": []
+				},
+				{
+					"name": "Dados de Produção - Com Sub-opção",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/producao?year=2023&sub_option=vinhos",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"producao"
+							],
+							"query": [
+								{
+									"key": "year",
+									"value": "2023",
+									"description": "Ano para filtrar os dados"
+								},
+								{
+									"key": "sub_option",
+									"value": "vinhos",
+									"description": "Sub-opção para filtros adicionais"
+								}
+							]
+						},
+						"description": "Busca dados de produção com filtros de ano e sub-opção."
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints relacionados aos dados de produção de uvas e vinhos."
+		},
+		{
+			"name": "Processamento",
+			"item": [
+				{
+					"name": "Dados de Processamento - Todos os Anos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/processamento",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"processamento"
+							]
+						},
+						"description": "Busca todos os dados de processamento de uvas e vinhos."
+					},
+					"response": []
+				},
+				{
+					"name": "Dados de Processamento - Filtrado por Ano",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/processamento?year=2023",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"processamento"
+							],
+							"query": [
+								{
+									"key": "year",
+									"value": "2023",
+									"description": "Ano para filtrar os dados"
+								}
+							]
+						},
+						"description": "Busca dados de processamento filtrados por ano."
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints relacionados aos dados de processamento de uvas e vinhos."
+		},
+		{
+			"name": "Comercialização",
+			"item": [
+				{
+					"name": "Dados de Comercialização - Todos os Anos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/comercializacao",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"comercializacao"
+							]
+						},
+						"description": "Busca todos os dados de comercialização de vinhos."
+					},
+					"response": []
+				},
+				{
+					"name": "Dados de Comercialização - Filtrado por Ano",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/comercializacao?year=2023",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"comercializacao"
+							],
+							"query": [
+								{
+									"key": "year",
+									"value": "2023",
+									"description": "Ano para filtrar os dados"
+								}
+							]
+						},
+						"description": "Busca dados de comercialização filtrados por ano."
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints relacionados aos dados de comercialização de vinhos."
+		},
+		{
+			"name": "Importação",
+			"item": [
+				{
+					"name": "Dados de Importação - Todos os Anos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/importacao",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"importacao"
+							]
+						},
+						"description": "Busca todos os dados de importação de vinhos e derivados."
+					},
+					"response": []
+				},
+				{
+					"name": "Dados de Importação - Filtrado por Ano",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/importacao?year=2023",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"importacao"
+							],
+							"query": [
+								{
+									"key": "year",
+									"value": "2023",
+									"description": "Ano para filtrar os dados"
+								}
+							]
+						},
+						"description": "Busca dados de importação filtrados por ano."
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints relacionados aos dados de importação de vinhos e derivados."
+		},
+		{
+			"name": "Exportação",
+			"item": [
+				{
+					"name": "Dados de Exportação - Todos os Anos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/exportacao",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"exportacao"
+							]
+						},
+						"description": "Busca todos os dados de exportação de vinhos e derivados."
+					},
+					"response": []
+				},
+				{
+					"name": "Dados de Exportação - Filtrado por Ano",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/exportacao?year=2023",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"exportacao"
+							],
+							"query": [
+								{
+									"key": "year",
+									"value": "2023",
+									"description": "Ano para filtrar os dados"
+								}
+							]
+						},
+						"description": "Busca dados de exportação filtrados por ano."
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints relacionados aos dados de exportação de vinhos e derivados."
+		},
+		{
+			"name": "Testes de Autenticação",
+			"item": [
+				{
+					"name": "Teste sem Autenticação (Deve falhar)",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/producao",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"producao"
+							]
+						},
+						"description": "Teste para verificar se a API rejeita requisições sem autenticação. Deve retornar status 401."
+					},
+					"response": []
+				},
+				{
+					"name": "Teste com Credenciais Inválidas (Deve falhar)",
+					"request": {
+						"auth": {
+							"type": "basic",
+							"basic": [
+								{
+									"key": "username",
+									"value": "usuario_invalido",
+									"type": "string"
+								},
+								{
+									"key": "password",
+									"value": "senha_invalida",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/producao",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"producao"
+							]
+						},
+						"description": "Teste para verificar se a API rejeita credenciais inválidas. Deve retornar status 401."
+					},
+					"response": []
+				},
+				{
+					"name": "Teste com User2 (Deve funcionar)",
+					"request": {
+						"auth": {
+							"type": "basic",
+							"basic": [
+								{
+									"key": "username",
+									"value": "user2",
+									"type": "string"
+								},
+								{
+									"key": "password",
+									"value": "password2",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/producao",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"producao"
+							]
+						},
+						"description": "Teste para verificar se o segundo usuário funciona corretamente. Deve retornar status 200."
+					},
+					"response": []
+				}
+			],
+			"description": "Testes para verificar o funcionamento da autenticação HTTP Basic."
+		}
+	],
+	"auth": {
+		"type": "basic",
+		"basic": [
+			{
+				"key": "username",
+				"value": "{{username}}",
+				"type": "string"
+			},
+			{
+				"key": "password",
+				"value": "{{password}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Script executado antes de cada requisição",
+					"console.log('Fazendo requisição para:', pm.request.url.toString());"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Testes automáticos executados após cada requisição",
+					"",
+					"// Verificar se a resposta não está vazia",
+					"pm.test('Response is not empty', function () {",
+					"    pm.expect(pm.response.text()).to.not.be.empty;",
+					"});",
+					"",
+					"// Para requisições autenticadas, verificar estrutura da resposta",
+					"if (pm.response.code === 200) {",
+					"    pm.test('Response has correct structure', function () {",
+					"        const jsonData = pm.response.json();",
+					"        pm.expect(jsonData).to.have.property('data');",
+					"        pm.expect(jsonData.data).to.have.property('header');",
+					"        pm.expect(jsonData.data).to.have.property('body');",
+					"        pm.expect(jsonData.data).to.have.property('footer');",
+					"    });",
+					"    ",
+					"    pm.test('Response time is acceptable', function () {",
+					"        pm.expect(pm.response.responseTime).to.be.below(30000);",
+					"    });",
+					"}",
+					"",
+					"// Para testes de autenticação inválida",
+					"if (pm.request.auth && pm.request.auth.type === 'noauth') {",
+					"    pm.test('Unauthorized request returns 401', function () {",
+					"        pm.expect(pm.response.code).to.equal(401);",
+					"    });",
+					"}"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:5000",
+			"type": "string"
+		},
+		{
+			"key": "username",
+			"value": "user1",
+			"type": "string"
+		},
+		{
+			"key": "password",
+			"value": "password1",
+			"type": "string"
+		}
+	]
+} 

@@ -66,6 +66,11 @@ A aplicação estará disponível em: `http://localhost:5000`
 ### Documentação Swagger
 Acesse: `http://localhost:5000/apidocs/`
 
+### Collection Postman
+- **Arquivo**: `postman_collection.json`
+- **Guia de uso**: `POSTMAN_GUIDE.md`
+- **Importar no Postman**: Import > Upload Files > Selecionar `postman_collection.json`
+
 ## Exemplos de Uso
 
 ### 1. Usando curl
