@@ -44,7 +44,7 @@ A collection já vem com variáveis pré-configuradas:
 
 ### 📁 Estrutura da Collection
 
-A collection está organizada em 8 pastas principais:
+A collection está organizada em 7 pastas principais:
 
 #### 1. **Produção** 🍇
 - Dados de Produção - Todos os Anos
@@ -83,8 +83,6 @@ A collection está organizada em 8 pastas principais:
 
 #### 6. **Health Check & Monitoring** 💓
 - Heartbeat - Health Check (com informações de versão)
-- API Info - Home
-- Test Endpoint
 
 #### 7. **Testes de Validação** ⚠️
 - Teste - Ano Limite Inferior (1970)

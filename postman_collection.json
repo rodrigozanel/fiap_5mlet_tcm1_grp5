@@ -424,51 +424,9 @@
 						"description": "Endpoint de monitoramento da saúde da API. Não requer autenticação e retorna informações sobre:\n- Status da aplicação\n- Versão atual (sistema simples baseado em version.txt)\n- Informações de ambiente (local/docker)\n- Status do Redis\n- Informações de build"
 					},
 					"response": []
-				},
-				{
-					"name": "API Info - Home",
-					"request": {
-						"auth": {
-							"type": "noauth"
-						},
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								""
-							]
-						},
-						"description": "Informações gerais sobre a API, endpoints disponíveis e documentação."
-					},
-					"response": []
-				},
-				{
-					"name": "Test Endpoint",
-					"request": {
-						"auth": {
-							"type": "noauth"
-						},
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/test",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"test"
-							]
-						},
-						"description": "Endpoint de teste simples para verificar se a API está respondendo."
-					},
-					"response": []
 				}
 			],
-			"description": "Endpoints para monitoramento da saúde da API e informações gerais."
+			"description": "Endpoint para monitoramento da saúde da API."
 		},
 		{
 			"name": "Testes de Validação",
@@ -759,8 +717,8 @@
 					"    pm.expect(pm.response.text()).to.not.be.empty;",
 					"});",
 					"",
-					"// Para requisições autenticadas bem-sucedidas, verificar estrutura da resposta",
-					"if (pm.response.code === 200 && !pm.request.url.toString().includes('/heartbeat') && !pm.request.url.toString().includes('/test') && !pm.request.url.toString().endsWith('/')) {",
+									"// Para requisições autenticadas bem-sucedidas, verificar estrutura da resposta",
+				"if (pm.response.code === 200 && !pm.request.url.toString().includes('/heartbeat')) {",
 					"    pm.test('Response has correct data structure', function () {",
 					"        const jsonData = pm.response.json();",
 					"        pm.expect(jsonData).to.have.property('data');",
@@ -789,8 +747,8 @@
 					"    pm.expect(pm.response.responseTime).to.be.below(30000);",
 					"});",
 					"",
-					"// Para testes de autenticação inválida",
-					"if (pm.request.auth && pm.request.auth.type === 'noauth' && !pm.request.url.toString().includes('/heartbeat') && !pm.request.url.toString().includes('/test') && !pm.request.url.toString().endsWith('/')) {",
+									"// Para testes de autenticação inválida",
+				"if (pm.request.auth && pm.request.auth.type === 'noauth' && !pm.request.url.toString().includes('/heartbeat')) {",
 					"    pm.test('Unauthorized request returns 401', function () {",
 					"        pm.expect(pm.response.code).to.equal(401);",
 					"    });",
@@ -822,16 +780,7 @@
 					"    });",
 					"}",
 					"",
-					"// Testes específicos para home/info",
-					"if (pm.request.url.toString().endsWith('/') || pm.request.url.toString().includes('/test')) {",
-					"    pm.test('Info endpoint returns correct structure', function () {",
-					"        const jsonData = pm.response.json();",
-					"        if (jsonData.endpoints) {",
-					"            pm.expect(jsonData).to.have.property('endpoints');",
-					"            pm.expect(jsonData).to.have.property('version');",
-					"        }",
-					"    });",
-					"}",
+					
 					"",
 					"// Testes específicos para validação de parâmetros",
 					"if (pm.request.url.toString().includes('year=1969') || pm.request.url.toString().includes('year=2025') || pm.request.url.toString().includes('year=abc')) {",
