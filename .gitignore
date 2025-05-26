@@ -162,4 +162,17 @@ node_modules/
 *.sw?
 # Task files
 tasks.json
-tasks/ 
+tasks/
+
+# Added by Claude Task Master
+.idea
+.vscode
+# OS specific
+
+# Build and version files (optional - commit if you want to track versions)
+# version.json
+# build_info.json
+
+# Compiled Python files
+__pycache__/
+*.pyc

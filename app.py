@@ -15,6 +15,25 @@ load_dotenv()
 # Import cache modules
 from cache import CacheManager
 
+# Import version management
+try:
+    from version import get_version, get_simple_version
+    VERSION_INFO = get_version()
+    APP_VERSION = VERSION_INFO['version']
+except ImportError:
+    # Fallback se o módulo de versão não estiver disponível
+    APP_VERSION = "1.0.0"
+    VERSION_INFO = {
+        'version': APP_VERSION,
+        'semantic_version': APP_VERSION,
+        'build_number': 0,
+        'commit_hash': 'unknown',
+        'branch': 'unknown',
+        'commit_date': 'unknown',
+        'build_date': datetime.now().isoformat(),
+        'is_git_repo': False
+    }
+
 app = Flask(__name__)
 
 # Initialize cache manager
@@ -30,8 +49,8 @@ logger = logging.getLogger(__name__)
 app.config['SWAGGER'] = {
     'title': 'Flask Web Scraping API - Dados Vitivinícolas Embrapa',
     'uiversion': 3,
-    'description': 'API para extração de dados vitivinícolas do site da Embrapa via web scraping',
-    'version': '1.0.0',
+    'description': f'API para extração de dados vitivinícolas do site da Embrapa via web scraping\n\nVersão: {VERSION_INFO["semantic_version"]}\nBuild: {VERSION_INFO["build_number"]}\nCommit: {VERSION_INFO["commit_hash"]}',
+    'version': APP_VERSION,
     'termsOfService': '',
     'contact': {
         'name': 'API Support',
@@ -224,10 +243,31 @@ def heartbeat():
               example: "API is running"
             version:
               type: string
-              example: "1.0.0"
+              example: "1.0.0.45"
+            semantic_version:
+              type: string
+              example: "1.0.0-45-g1a2b3c4"
             service:
               type: string
               example: "Flask Web Scraping API"
+            build_info:
+              type: object
+              properties:
+                build_number:
+                  type: integer
+                  example: 45
+                commit_hash:
+                  type: string
+                  example: "1a2b3c4"
+                branch:
+                  type: string
+                  example: "main"
+                commit_date:
+                  type: string
+                  example: "2025-01-26 10:30:00 -0300"
+                build_date:
+                  type: string
+                  example: "2025-01-26T13:45:00.123456"
     """
     # Check Redis connection
     redis_status = "connected" if cache_manager.redis_client and cache_manager.redis_client.ping() else "disconnected"
@@ -236,10 +276,19 @@ def heartbeat():
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "uptime": "API is running",
-        "version": "1.0.0",
+        "version": VERSION_INFO['version'],
+        "semantic_version": VERSION_INFO['semantic_version'],
         "service": "Flask Web Scraping API - Dados Vitivinícolas Embrapa",
         "endpoints_available": 5,
         "authentication": "HTTP Basic Auth",
+        "build_info": {
+            "build_number": VERSION_INFO['build_number'],
+            "commit_hash": VERSION_INFO['commit_hash'],
+            "branch": VERSION_INFO['branch'],
+            "commit_date": VERSION_INFO['commit_date'],
+            "build_date": VERSION_INFO['build_date'],
+            "is_git_repo": VERSION_INFO['is_git_repo']
+        },
         "cache": {
             "redis_status": redis_status,
             "short_cache_ttl": cache_manager.short_cache_ttl,
