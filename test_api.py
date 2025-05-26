@@ -26,6 +26,28 @@ def test_api():
     print("🧪 Testando API Flask de Web Scraping")
     print("=" * 50)
     
+    # Teste rápido de validação de parâmetros
+    print("\n🔍 Teste rápido de validação de parâmetros...")
+    try:
+        # Testar ano inválido
+        response = requests.get(f"{base_url}/producao", auth=auth, params={'year': '1969'}, timeout=10)
+        if response.status_code == 400:
+            print("✅ Validação de ano funcionando (ano inválido rejeitado)")
+        else:
+            print(f"⚠️ Validação de ano pode ter problema (Status: {response.status_code})")
+            
+        # Testar sub-opção inválida
+        response = requests.get(f"{base_url}/producao", auth=auth, params={'sub_option': 'OPCAO_INEXISTENTE'}, timeout=10)
+        if response.status_code == 400:
+            print("✅ Validação de sub-opção funcionando (opção inválida rejeitada)")
+        else:
+            print(f"⚠️ Validação de sub-opção pode ter problema (Status: {response.status_code})")
+            
+    except Exception as e:
+        print(f"⚠️ Erro no teste de validação: {str(e)}")
+    
+    print("\n📡 Testando endpoints principais...")
+    
     for endpoint in endpoints:
         try:
             print(f"\n📡 Testando {endpoint}...")

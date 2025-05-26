@@ -4,8 +4,28 @@ from flask import Flask, jsonify, request
 from flask_httpauth import HTTPBasicAuth
 from flasgger import Swagger
 import urllib.parse
+import os
+import logging
+from datetime import datetime, timezone
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Import cache modules
+from cache import CacheManager
 
 app = Flask(__name__)
+
+# Initialize cache manager
+cache_manager = CacheManager()
+
+# Configure logging
+logging.basicConfig(
+    level=os.getenv('LOG_LEVEL', 'INFO'),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 app.config['SWAGGER'] = {
     'title': 'Flask Web Scraping API - Dados Vitivinícolas Embrapa',
@@ -65,6 +85,45 @@ ROUTE_OPCAO_MAP = {
     'importacao': 'opt_05',
     'exportacao': 'opt_06'
 }
+
+# Validation constants
+VALID_YEARS = list(range(1970, 2025))  # 1970-2024
+VALID_SUB_OPTIONS = {
+    'production': ['VINHO DE MESA', 'VINHO FINO DE MESA (VINIFERA)', 'SUCO DE UVA', 'DERIVADOS'],
+    'processamento': ['viniferas', 'americanas', 'mesa', 'semclass'],
+    'comercializacao': ['VINHO DE MESA', 'ESPUMANTES', 'UVAS FRESCAS', 'SUCO DE UVA'],
+    'importacao': ['vinhos', 'espumantes', 'frescas', 'passas', 'suco'],
+    'exportacao': ['vinho', 'uva', 'espumantes', 'suco']
+}
+
+def validate_parameters(year=None, sub_option=None, endpoint=None):
+    """
+    Validate year and sub_option parameters.
+    
+    Args:
+        year (str): Year parameter to validate
+        sub_option (str): Sub-option parameter to validate
+        endpoint (str): Endpoint name for sub_option validation
+        
+    Returns:
+        tuple: (is_valid, error_message)
+    """
+    # Validate year
+    if year is not None:
+        try:
+            year_int = int(year)
+            if year_int not in VALID_YEARS:
+                return False, f"Ano inválido. Deve estar entre {min(VALID_YEARS)} e {max(VALID_YEARS)}."
+        except ValueError:
+            return False, "Ano deve ser um número inteiro válido."
+    
+    # Validate sub_option
+    if sub_option is not None and endpoint is not None:
+        valid_options = VALID_SUB_OPTIONS.get(endpoint, [])
+        if valid_options and sub_option not in valid_options:
+            return False, f"Sub-opção inválida para {endpoint}. Opções válidas: {', '.join(valid_options)}"
+    
+    return True, None
 
 def build_url(route_name, year=None, sub_option=None):
     """
@@ -170,17 +229,22 @@ def heartbeat():
               type: string
               example: "Flask Web Scraping API"
     """
-    from datetime import datetime
-    import time
+    # Check Redis connection
+    redis_status = "connected" if cache_manager.redis_client and cache_manager.redis_client.ping() else "disconnected"
     
     return jsonify({
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "uptime": "API is running",
         "version": "1.0.0",
         "service": "Flask Web Scraping API - Dados Vitivinícolas Embrapa",
         "endpoints_available": 5,
-        "authentication": "HTTP Basic Auth"
+        "authentication": "HTTP Basic Auth",
+        "cache": {
+            "redis_status": redis_status,
+            "short_cache_ttl": cache_manager.short_cache_ttl,
+            "fallback_cache_ttl": cache_manager.fallback_cache_ttl
+        }
     }), 200
 
 
@@ -193,55 +257,137 @@ def production():
     parameters:
       - name: year
         in: query
-        type: string
+        type: integer
+        minimum: 1970
+        maximum: 2024
         required: false
-        description: O ano para filtrar os dados.
+        description: O ano para filtrar os dados (1970-2024).
       - name: sub_option
         in: query
         type: string
         required: false
-        description: A sub-opção para filtrar os dados.
+        enum: ["VINHO DE MESA", "VINHO FINO DE MESA (VINIFERA)", "SUCO DE UVA", "DERIVADOS"]
+        description: A sub-opção para filtrar os dados de produção.
     responses:
       200:
         description: Dados de produção recuperados com sucesso.
+        schema:
+          type: object
+          properties:
+            data:
+              type: object
+            cached:
+              type: string
+              enum: [false, "short_term", "fallback"]
+              description: Indica se os dados vieram do cache
+      400:
+        description: Parâmetros inválidos.
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              description: Mensagem de erro de validação
       401:
         description: Autenticação necessária.
+      500:
+        description: Erro interno do servidor.
     """
     route_name = request.endpoint
     year = request.args.get('year')
     sub_option = request.args.get('sub_option')
+    
+    # Validate parameters
+    is_valid, error_message = validate_parameters(year, sub_option, route_name)
+    if not is_valid:
+        return jsonify({"error": error_message}), 400
+    
+    # Build URL and parameters for cache
     url = build_url(route_name, year, sub_option)
-    return get_content(url), 200
+    params = {'year': year, 'sub_option': sub_option}
+    
+    # Get content with cache
+    content, cached_flag = get_content_with_cache('producao', url, params)
+    
+    if content is None:
+        return jsonify({"error": "Failed to fetch data and no cache available"}), 500
+    
+    # Add cache flag to response
+    response_data = content.copy() if isinstance(content, dict) else {"data": content}
+    response_data["cached"] = cached_flag
+    
+    return jsonify(response_data), 200
 
 
 @app.route("/processamento", methods=["GET"])
 @auth.login_required
-def processamento():    
+def processamento():
     """
     Busca dados de processamento.
     ---
     parameters:
       - name: year
         in: query
-        type: string
+        type: integer
+        minimum: 1970
+        maximum: 2024
         required: false
-        description: O ano para filtrar os dados.
+        description: O ano para filtrar os dados (1970-2024).
       - name: sub_option
         in: query
         type: string
         required: false
-        description: A sub-opção para filtrar os dados.
+        enum: ["viniferas", "americanas", "mesa", "semclass"]
+        description: A sub-opção para filtrar os dados de processamento.
     responses:
       200:
         description: Dados de processamento recuperados com sucesso.
+        schema:
+          type: object
+          properties:
+            data:
+              type: object
+            cached:
+              type: string
+              enum: [false, "short_term", "fallback"]
+              description: Indica se os dados vieram do cache
+      400:
+        description: Parâmetros inválidos.
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              description: Mensagem de erro de validação
       401:
         description: Autenticação necessária.
-    """    
+      500:
+        description: Erro interno do servidor.
+    """
     route_name = request.endpoint
     year = request.args.get('year')
     sub_option = request.args.get('sub_option')
+    
+    # Validate parameters
+    is_valid, error_message = validate_parameters(year, sub_option, route_name)
+    if not is_valid:
+        return jsonify({"error": error_message}), 400
+    
+    # Build URL and parameters for cache
     url = build_url(route_name, year, sub_option)
-    return get_content(url), 200
+    params = {'year': year, 'sub_option': sub_option}
+    
+    # Get content with cache
+    content, cached_flag = get_content_with_cache('processamento', url, params)
+    
+    if content is None:
+        return jsonify({"error": "Failed to fetch data and no cache available"}), 500
+    
+    # Add cache flag to response
+    response_data = content.copy() if isinstance(content, dict) else {"data": content}
+    response_data["cached"] = cached_flag
+    
+    return jsonify(response_data), 200
 
 
 @app.route("/comercializacao", methods=["GET"])
@@ -253,25 +399,66 @@ def comercializacao():
     parameters:
       - name: year
         in: query
-        type: string
+        type: integer
+        minimum: 1970
+        maximum: 2024
         required: false
-        description: O ano para filtrar os dados.
+        description: O ano para filtrar os dados (1970-2024).
       - name: sub_option
         in: query
         type: string
         required: false
-        description: A sub-opção para filtrar os dados.
+        enum: ["VINHO DE MESA", "ESPUMANTES", "UVAS FRESCAS", "SUCO DE UVA"]
+        description: A sub-opção para filtrar os dados de comercialização.
     responses:
       200:
         description: Dados de comercialização recuperados com sucesso.
+        schema:
+          type: object
+          properties:
+            data:
+              type: object
+            cached:
+              type: string
+              enum: [false, "short_term", "fallback"]
+              description: Indica se os dados vieram do cache
+      400:
+        description: Parâmetros inválidos.
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              description: Mensagem de erro de validação
       401:
         description: Autenticação necessária.
+      500:
+        description: Erro interno do servidor.
     """
     route_name = request.endpoint
     year = request.args.get('year')
     sub_option = request.args.get('sub_option')
+    
+    # Validate parameters
+    is_valid, error_message = validate_parameters(year, sub_option, route_name)
+    if not is_valid:
+        return jsonify({"error": error_message}), 400
+    
+    # Build URL and parameters for cache
     url = build_url(route_name, year, sub_option)
-    return get_content(url), 200
+    params = {'year': year, 'sub_option': sub_option}
+    
+    # Get content with cache
+    content, cached_flag = get_content_with_cache('comercializacao', url, params)
+    
+    if content is None:
+        return jsonify({"error": "Failed to fetch data and no cache available"}), 500
+    
+    # Add cache flag to response
+    response_data = content.copy() if isinstance(content, dict) else {"data": content}
+    response_data["cached"] = cached_flag
+    
+    return jsonify(response_data), 200
 
 
 @app.route("/importacao", methods=["GET"])
@@ -283,25 +470,66 @@ def importacao():
     parameters:
       - name: year
         in: query
-        type: string
+        type: integer
+        minimum: 1970
+        maximum: 2024
         required: false
-        description: O ano para filtrar os dados.
+        description: O ano para filtrar os dados (1970-2024).
       - name: sub_option
         in: query
         type: string
         required: false
-        description: A sub-opção para filtrar os dados.
+        enum: ["vinhos", "espumantes", "frescas", "passas", "suco"]
+        description: A sub-opção para filtrar os dados de importação.
     responses:
       200:
         description: Dados de importação recuperados com sucesso.
+        schema:
+          type: object
+          properties:
+            data:
+              type: object
+            cached:
+              type: string
+              enum: [false, "short_term", "fallback"]
+              description: Indica se os dados vieram do cache
+      400:
+        description: Parâmetros inválidos.
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              description: Mensagem de erro de validação
       401:
         description: Autenticação necessária.
+      500:
+        description: Erro interno do servidor.
     """
     route_name = request.endpoint
     year = request.args.get('year')
     sub_option = request.args.get('sub_option')
+    
+    # Validate parameters
+    is_valid, error_message = validate_parameters(year, sub_option, route_name)
+    if not is_valid:
+        return jsonify({"error": error_message}), 400
+    
+    # Build URL and parameters for cache
     url = build_url(route_name, year, sub_option)
-    return get_content(url), 200
+    params = {'year': year, 'sub_option': sub_option}
+    
+    # Get content with cache
+    content, cached_flag = get_content_with_cache('importacao', url, params)
+    
+    if content is None:
+        return jsonify({"error": "Failed to fetch data and no cache available"}), 500
+    
+    # Add cache flag to response
+    response_data = content.copy() if isinstance(content, dict) else {"data": content}
+    response_data["cached"] = cached_flag
+    
+    return jsonify(response_data), 200
 
 
 @app.route("/exportacao", methods=["GET"])
@@ -313,25 +541,66 @@ def exportacao():
     parameters:
       - name: year
         in: query
-        type: string
+        type: integer
+        minimum: 1970
+        maximum: 2024
         required: false
-        description: O ano para filtrar os dados.
+        description: O ano para filtrar os dados (1970-2024).
       - name: sub_option
         in: query
         type: string
         required: false
-        description: A sub-opção para filtrar os dados.
+        enum: ["vinho", "uva", "espumantes", "suco"]
+        description: A sub-opção para filtrar os dados de exportação.
     responses:
       200:
         description: Dados de exportação recuperados com sucesso.
+        schema:
+          type: object
+          properties:
+            data:
+              type: object
+            cached:
+              type: string
+              enum: [false, "short_term", "fallback"]
+              description: Indica se os dados vieram do cache
+      400:
+        description: Parâmetros inválidos.
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              description: Mensagem de erro de validação
       401:
         description: Autenticação necessária.
+      500:
+        description: Erro interno do servidor.
     """
     route_name = request.endpoint
     year = request.args.get('year')
     sub_option = request.args.get('sub_option')
+    
+    # Validate parameters
+    is_valid, error_message = validate_parameters(year, sub_option, route_name)
+    if not is_valid:
+        return jsonify({"error": error_message}), 400
+    
+    # Build URL and parameters for cache
     url = build_url(route_name, year, sub_option)
-    return get_content(url), 200
+    params = {'year': year, 'sub_option': sub_option}
+    
+    # Get content with cache
+    content, cached_flag = get_content_with_cache('exportacao', url, params)
+    
+    if content is None:
+        return jsonify({"error": "Failed to fetch data and no cache available"}), 500
+    
+    # Add cache flag to response
+    response_data = content.copy() if isinstance(content, dict) else {"data": content}
+    response_data["cached"] = cached_flag
+    
+    return jsonify(response_data), 200
 
 
 # Helper functions for parsing table data
@@ -431,51 +700,128 @@ def _parse_table_rows_fallback(table_tag, thead_tag, tfoot_tag):
                 body_fallback_rows.append(current_row_cells)
     return body_fallback_rows
 
+def get_content_with_cache(endpoint_name, url, params=None):
+    """
+    Fetch content with two-layer caching strategy.
+    
+    Args:
+        endpoint_name (str): Name of the endpoint for cache key generation
+        url (str): The URL to fetch content from
+        params (dict): Request parameters for cache key generation
+        
+    Returns:
+        tuple: (content, cached_flag) where cached_flag indicates cache source
+    """
+    try:
+        # Try short-term cache first
+        cached_response = cache_manager.get_short_cache(endpoint_name, params)
+        if cached_response:
+            logger.info(f"Returning data from short-term cache for {endpoint_name}")
+            return cached_response['data'], cached_response['cached']
+        
+        # Try to fetch fresh data
+        logger.info(f"Fetching fresh data from {url}")
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        
+        # Parse the content to get structured data
+        parsed_data = parse_html_content(response.text)
+        
+        # Store in both caches
+        cache_manager.set_short_cache(endpoint_name, parsed_data, params)
+        cache_manager.set_fallback_cache(endpoint_name, parsed_data, params)
+        
+        logger.info(f"Fresh data fetched and cached for {endpoint_name}")
+        return parsed_data, False
+        
+    except requests.RequestException as e:
+        logger.error(f"Error fetching content from {url}: {e}")
+        
+        # Try fallback cache when web scraping fails
+        cached_response = cache_manager.get_fallback_cache(endpoint_name, params)
+        if cached_response:
+            logger.warning(f"Returning fallback cache data for {endpoint_name} due to scraping failure")
+            return cached_response['data'], cached_response['cached']
+        
+        # No cache available, return error
+        logger.error(f"No cached data available for {endpoint_name}")
+        return None, False
+    
+    except Exception as e:
+        logger.error(f"Unexpected error in get_content_with_cache: {e}")
+        return None, False
+
+
+def parse_html_content(html_content):
+    """
+    Parse HTML content and extract structured data.
+    
+    Args:
+        html_content (str): Raw HTML content
+        
+    Returns:
+        dict: Parsed data from HTML tables
+    """
+    if not html_content:
+        return {"data": {"header": [], "body": [], "footer": []}, "message": "No content to parse."}
+    
+    soup = BeautifulSoup(html_content, "html.parser")
+    
+    # Find the specific table by class 'tb_base tb_dados'
+    table_tag = soup.find('table', class_='tb_base tb_dados')
+    
+    parsed_table_data = {"header": [], "body": [], "footer": []}
+
+    if not table_tag:
+        logger.info("No table with class 'tb_base tb_dados' found")
+        return {"data": parsed_table_data, "message": "Table not found or empty."}
+
+    # Parse header
+    thead_tag = table_tag.find('thead')
+    parsed_table_data["header"] = _parse_html_table_section(thead_tag)
+
+    # Parse footer
+    tfoot_tag = table_tag.find('tfoot')
+    parsed_table_data["footer"] = _parse_html_table_section(tfoot_tag)
+
+    # Parse body
+    tbody_tag = table_tag.find('tbody')
+    if tbody_tag:
+        parsed_table_data["body"] = _parse_tbody_with_grouped_items(tbody_tag)
+    else:
+        # Fallback for tables without an explicit <tbody>
+        logger.info("No explicit tbody found in table. Using fallback parsing for body.")
+        parsed_table_data["body"] = _parse_table_rows_fallback(table_tag, thead_tag, tfoot_tag)
+        
+    return {"data": parsed_table_data}
+
+
 def get_content(url):
     """
+    Legacy function for backward compatibility.
     Fetches content from a URL, parses an HTML table, and returns its data.
-    Handles tables with thead, tbody, tfoot, and item/subitem structures in tbody.
-    Includes fallback for tables without an explicit tbody.
     """
     try:
         response = requests.get(url)
-        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
-        soup = BeautifulSoup(response.text, "html.parser")
-
-        # Find the specific table by class 'tb_base tb_dados'
-        table_tag = soup.find('table', class_='tb_base tb_dados')
+        response.raise_for_status()
         
-        parsed_table_data = {"header": [], "body": [], "footer": []}
-
-        if not table_tag:
-            app.logger.info(f"No table with class 'tb_base tb_dados' found at {url}")
-            return jsonify({"data": parsed_table_data, "message": "Table not found or empty."})
-
-        # Parse header
-        thead_tag = table_tag.find('thead')
-        parsed_table_data["header"] = _parse_html_table_section(thead_tag) # Handles None thead_tag
-
-        # Parse footer
-        tfoot_tag = table_tag.find('tfoot')
-        parsed_table_data["footer"] = _parse_html_table_section(tfoot_tag) # Handles None tfoot_tag
-
-        # Parse body
-        tbody_tag = table_tag.find('tbody')
-        if tbody_tag:
-            parsed_table_data["body"] = _parse_tbody_with_grouped_items(tbody_tag)
-        else:
-            # Fallback for tables without an explicit <tbody>
-            app.logger.info(f"No explicit tbody found in table at {url}. Using fallback parsing for body.")
-            parsed_table_data["body"] = _parse_table_rows_fallback(table_tag, thead_tag, tfoot_tag)
-            
-        return jsonify({"data": parsed_table_data})
+        parsed_data = parse_html_content(response.text)
+        return jsonify(parsed_data)
 
     except requests.exceptions.RequestException as e:
-        app.logger.error(f"Request failed for URL {url}: {e}")
+        logger.error(f"Request failed for URL {url}: {e}")
         return jsonify({"error": f"Request failed: {str(e)}"}), 500
     except Exception as e:
-        app.logger.error(f"An unexpected error occurred while processing content from {url}: {e}", exc_info=True)
+        logger.error(f"An unexpected error occurred while processing content from {url}: {e}", exc_info=True)
         return jsonify({"error": "An unexpected error occurred while parsing the table content."}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Get configuration from environment variables
+    host = os.getenv('APP_HOST', '0.0.0.0')
+    port = int(os.getenv('APP_PORT', 5000))
+    debug = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
+    
+    logger.info(f"Starting Flask app on {host}:{port}")
+    logger.info(f"Redis connection: {'available' if cache_manager.redis_client else 'unavailable'}")
+    
+    app.run(host=host, port=port, debug=debug)

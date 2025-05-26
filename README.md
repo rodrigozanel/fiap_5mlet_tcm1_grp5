@@ -10,6 +10,7 @@ Esta é uma API Flask que realiza web scraping do site da Embrapa para extrair d
 - **Parsing inteligente de tabelas**: Extração estruturada de dados HTML
 - **Documentação Swagger**: Interface interativa para testar a API
 - **Tratamento de erros**: Logging detalhado e respostas estruturadas
+- **Dados de fallback**: Arquivos CSV locais como fonte alternativa de dados
 
 ## Configuração do Ambiente
 
