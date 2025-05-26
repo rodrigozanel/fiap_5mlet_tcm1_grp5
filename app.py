@@ -8,11 +8,45 @@ import urllib.parse
 app = Flask(__name__)
 
 app.config['SWAGGER'] = {
-    'title': 'Flask Web Scraping API',
-    'uiversion': 3
+    'title': 'Flask Web Scraping API - Dados Vitivinícolas Embrapa',
+    'uiversion': 3,
+    'description': 'API para extração de dados vitivinícolas do site da Embrapa via web scraping',
+    'version': '1.0.0',
+    'termsOfService': '',
+    'contact': {
+        'name': 'API Support',
+        'url': 'http://localhost:5000',
+        'email': 'support@example.com'
+    },
+    'license': {
+        'name': 'MIT',
+        'url': 'https://opensource.org/licenses/MIT'
+    },
+    'host': 'localhost:5000',
+    'basePath': '/',
+    'schemes': ['http'],
+    'securityDefinitions': {
+        'BasicAuth': {
+            'type': 'basic'
+        }
+    },
+    'security': [
+        {
+            'BasicAuth': []
+        }
+    ]
 }
 
-swagger = Swagger(app)
+swagger = Swagger(app, template={
+    'swagger': '2.0',
+    'info': {
+        'title': app.config['SWAGGER']['title'],
+        'description': app.config['SWAGGER']['description'],
+        'version': app.config['SWAGGER']['version']
+    },
+    'securityDefinitions': app.config['SWAGGER']['securityDefinitions'],
+    'security': app.config['SWAGGER']['security']
+})
 
 auth = HTTPBasicAuth()
 
@@ -67,6 +101,87 @@ def verify_password(username, password):
     if username in users and users[username] == password:
         return username
     return None
+
+
+@app.route("/", methods=["GET"])
+def home():
+    """
+    Página inicial da API.
+    ---
+    responses:
+      200:
+        description: Informações básicas da API.
+    """
+    return jsonify({
+        "message": "API Flask de Web Scraping - Dados Vitivinícolas Embrapa",
+        "version": "1.0.0",
+        "endpoints": [
+            "/producao",
+            "/processamento", 
+            "/comercializacao",
+            "/importacao",
+            "/exportacao"
+        ],
+        "health_check": "/heartbeat",
+        "test_endpoint": "/test",
+        "documentation": "/apidocs/",
+        "authentication": "HTTP Basic Auth required"
+    }), 200
+
+
+@app.route("/test", methods=["GET"])
+def test():
+    """
+    Endpoint de teste simples.
+    ---
+    responses:
+      200:
+        description: Teste bem-sucedido.
+    """
+    return jsonify({"status": "OK", "message": "API funcionando corretamente!"}), 200
+
+
+@app.route("/heartbeat", methods=["GET"])
+def heartbeat():
+    """
+    Endpoint de heartbeat para monitoramento da saúde da API.
+    ---
+    tags:
+      - Health Check
+    responses:
+      200:
+        description: API está funcionando corretamente.
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+              example: "healthy"
+            timestamp:
+              type: string
+              example: "2025-05-26T01:48:00Z"
+            uptime:
+              type: string
+              example: "API is running"
+            version:
+              type: string
+              example: "1.0.0"
+            service:
+              type: string
+              example: "Flask Web Scraping API"
+    """
+    from datetime import datetime
+    import time
+    
+    return jsonify({
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "uptime": "API is running",
+        "version": "1.0.0",
+        "service": "Flask Web Scraping API - Dados Vitivinícolas Embrapa",
+        "endpoints_available": 5,
+        "authentication": "HTTP Basic Auth"
+    }), 200
 
 
 @app.route("/producao", methods=["GET"])

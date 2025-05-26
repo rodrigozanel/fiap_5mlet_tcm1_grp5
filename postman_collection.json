@@ -282,6 +282,75 @@
 			"description": "Endpoints relacionados aos dados de exportação de vinhos e derivados."
 		},
 		{
+			"name": "Health Check & Monitoring",
+			"item": [
+				{
+					"name": "Heartbeat - Health Check",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/heartbeat",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"heartbeat"
+							]
+						},
+						"description": "Endpoint de monitoramento da saúde da API. Não requer autenticação e retorna informações sobre o status da aplicação."
+					},
+					"response": []
+				},
+				{
+					"name": "API Info - Home",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Informações gerais sobre a API, endpoints disponíveis e documentação."
+					},
+					"response": []
+				},
+				{
+					"name": "Test Endpoint",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/test",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"test"
+							]
+						},
+						"description": "Endpoint de teste simples para verificar se a API está respondendo."
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints para monitoramento da saúde da API e informações gerais."
+		},
+		{
 			"name": "Testes de Autenticação",
 			"item": [
 				{
@@ -428,12 +497,34 @@
 					"    });",
 					"}",
 					"",
-					"// Para testes de autenticação inválida",
-					"if (pm.request.auth && pm.request.auth.type === 'noauth') {",
-					"    pm.test('Unauthorized request returns 401', function () {",
-					"        pm.expect(pm.response.code).to.equal(401);",
-					"    });",
-					"}"
+									"// Para testes de autenticação inválida",
+				"if (pm.request.auth && pm.request.auth.type === 'noauth') {",
+				"    pm.test('Unauthorized request returns 401', function () {",
+				"        pm.expect(pm.response.code).to.equal(401);",
+				"    });",
+				"}",
+				"",
+				"// Testes específicos para heartbeat",
+				"if (pm.request.url.toString().includes('/heartbeat')) {",
+				"    pm.test('Heartbeat returns healthy status', function () {",
+				"        const jsonData = pm.response.json();",
+				"        pm.expect(jsonData).to.have.property('status', 'healthy');",
+				"        pm.expect(jsonData).to.have.property('timestamp');",
+				"        pm.expect(jsonData).to.have.property('version');",
+				"        pm.expect(jsonData).to.have.property('service');",
+				"    });",
+				"}",
+				"",
+				"// Testes específicos para home/info",
+				"if (pm.request.url.toString().endsWith('/') || pm.request.url.toString().includes('/test')) {",
+				"    pm.test('Info endpoint returns correct structure', function () {",
+				"        const jsonData = pm.response.json();",
+				"        if (jsonData.endpoints) {",
+				"            pm.expect(jsonData).to.have.property('endpoints');",
+				"            pm.expect(jsonData).to.have.property('version');",
+				"        }",
+				"    });",
+				"}"
 				]
 			}
 		}

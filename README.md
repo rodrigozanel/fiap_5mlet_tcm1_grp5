@@ -55,13 +55,21 @@ A aplicação estará disponível em: `http://localhost:5000`
 
 ### Endpoints de Dados
 
-| Endpoint | Descrição | Parâmetros Opcionais |
-|----------|-----------|---------------------|
-| `/producao` | Dados de produção | `year`, `sub_option` |
-| `/processamento` | Dados de processamento | `year`, `sub_option` |
-| `/comercializacao` | Dados de comercialização | `year`, `sub_option` |
-| `/importacao` | Dados de importação | `year`, `sub_option` |
-| `/exportacao` | Dados de exportação | `year`, `sub_option` |
+| Endpoint | Descrição | Parâmetros Opcionais | Autenticação |
+|----------|-----------|---------------------|---------------|
+| `/producao` | Dados de produção | `year`, `sub_option` | ✅ Requerida |
+| `/processamento` | Dados de processamento | `year`, `sub_option` | ✅ Requerida |
+| `/comercializacao` | Dados de comercialização | `year`, `sub_option` | ✅ Requerida |
+| `/importacao` | Dados de importação | `year`, `sub_option` | ✅ Requerida |
+| `/exportacao` | Dados de exportação | `year`, `sub_option` | ✅ Requerida |
+
+### Endpoints de Monitoramento
+
+| Endpoint | Descrição | Autenticação |
+|----------|-----------|--------------|
+| `/` | Informações da API | ❌ Não requerida |
+| `/heartbeat` | Health check da API | ❌ Não requerida |
+| `/test` | Endpoint de teste | ❌ Não requerida |
 
 ### Documentação Swagger
 Acesse: `http://localhost:5000/apidocs/`
@@ -84,6 +92,12 @@ curl -u user1:password1 "http://localhost:5000/producao?year=2023"
 
 # Dados de exportação com filtros
 curl -u user1:password1 "http://localhost:5000/exportacao?year=2023&sub_option=vinhos"
+
+# Health check da API (sem autenticação)
+curl "http://localhost:5000/heartbeat"
+
+# Informações da API (sem autenticação)
+curl "http://localhost:5000/"
 ```
 
 ### 2. Usando Python requests
