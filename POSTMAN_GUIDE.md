@@ -1,6 +1,6 @@
-# Guia da Collection Postman - API Flask Dados Vitivinícolas
+# Guia da Collection Postman - API Flask Dados Vitivinícolas v1.1.0
 
-Este guia explica como importar e usar a collection do Postman para testar a API Flask de Web Scraping.
+Este guia explica como importar e usar a collection do Postman para testar a API Flask de Web Scraping com sistema de versionamento simples e validação rigorosa de parâmetros.
 
 ## 📥 Como Importar a Collection
 
@@ -22,11 +22,18 @@ Este guia explica como importar e usar a collection do Postman para testar a API
 
 ### 1. Verificar Variáveis de Ambiente
 A collection já vem com variáveis pré-configuradas:
-- `base_url`: `http://localhost:5000`
+- `base_url`: `http://localhost:5000` (funciona para local e Docker)
 - `username`: `user1`
 - `password`: `password1`
 
-### 2. Modificar Variáveis (se necessário)
+### 2. Funcionalidades da Versão 1.1.0
+- ✅ **Validação rigorosa de parâmetros**: year (1970-2024) e sub_option (listas fechadas)
+- ✅ **Sistema de versionamento simples**: baseado em arquivo version.txt
+- ✅ **Sub-opções específicas por endpoint**: cada endpoint tem suas próprias opções válidas
+- ✅ **Testes de validação automáticos**: verificam parâmetros inválidos
+- ✅ **Informações de versão no heartbeat**: mostra versão atual e ambiente
+
+### 3. Modificar Variáveis (se necessário)
 1. Clique na collection **"API Flask - Dados Vitivinícolas Embrapa"**
 2. Vá para a aba **"Variables"**
 3. Modifique os valores conforme necessário:
@@ -37,30 +44,57 @@ A collection já vem com variáveis pré-configuradas:
 
 ### 📁 Estrutura da Collection
 
-A collection está organizada em 6 pastas principais:
+A collection está organizada em 8 pastas principais:
 
 #### 1. **Produção** 🍇
 - Dados de Produção - Todos os Anos
 - Dados de Produção - Filtrado por Ano
-- Dados de Produção - Com Sub-opção
+- Dados de Produção - Vinho de Mesa
+- Dados de Produção - Suco de Uva
+- Teste Validação - Ano Inválido (Deve falhar)
+- Teste Validação - Sub-opção Inválida (Deve falhar)
+
+**Sub-opções válidas**: VINHO DE MESA, VINHO FINO DE MESA (VINIFERA), SUCO DE UVA, DERIVADOS
 
 #### 2. **Processamento** ⚙️
 - Dados de Processamento - Todos os Anos
-- Dados de Processamento - Filtrado por Ano
+- Dados de Processamento - Viníferas
+- Dados de Processamento - Americanas
+
+**Sub-opções válidas**: viniferas, americanas, mesa, semclass
 
 #### 3. **Comercialização** 🛒
 - Dados de Comercialização - Todos os Anos
-- Dados de Comercialização - Filtrado por Ano
+- Dados de Comercialização - Espumantes
+
+**Sub-opções válidas**: VINHO DE MESA, ESPUMANTES, UVAS FRESCAS, SUCO DE UVA
 
 #### 4. **Importação** 📦
 - Dados de Importação - Todos os Anos
-- Dados de Importação - Filtrado por Ano
+- Dados de Importação - Vinhos
+
+**Sub-opções válidas**: vinhos, espumantes, frescas, passas, suco
 
 #### 5. **Exportação** 🚢
 - Dados de Exportação - Todos os Anos
-- Dados de Exportação - Filtrado por Ano
+- Dados de Exportação - Uvas
 
-#### 6. **Testes de Autenticação** 🔐
+**Sub-opções válidas**: vinho, uva, espumantes, suco
+
+#### 6. **Health Check & Monitoring** 💓
+- Heartbeat - Health Check (com informações de versão)
+- API Info - Home
+- Test Endpoint
+
+#### 7. **Testes de Validação** ⚠️
+- Teste - Ano Limite Inferior (1970)
+- Teste - Ano Limite Superior (2024)
+- Teste - Ano Inválido Baixo (1969)
+- Teste - Ano Inválido Alto (2025)
+- Teste - Sub-opção Inválida Produção
+- Teste - Ano Não Numérico
+
+#### 8. **Testes de Autenticação** 🔐
 - Teste sem Autenticação (Deve falhar)
 - Teste com Credenciais Inválidas (Deve falhar)
 - Teste com User2 (Deve funcionar)
@@ -95,9 +129,25 @@ A collection inclui testes automáticos que verificam:
 ### ✅ Testes para Requisições Autenticadas (status 200):
 - Estrutura correta da resposta JSON
 - Presença dos campos obrigatórios: `data`, `header`, `body`, `footer`
+- Informações de cache incluídas na resposta
+
+### ✅ Testes para Validação de Parâmetros (status 400):
+- Estrutura correta do erro de validação
+- Mensagem de erro presente
 
 ### ✅ Testes para Autenticação Inválida:
 - Retorna status 401 para requisições não autenticadas
+
+### ✅ Testes Específicos para Heartbeat:
+- Status "healthy" presente
+- Informações de versão incluídas (version_info)
+- Status do cache Redis
+- Timestamp e service name
+
+### ✅ Testes de Validação de Parâmetros:
+- Anos inválidos (1969, 2025, "abc") retornam erro 400
+- Sub-opções inválidas retornam erro 400
+- Anos válidos nos limites (1970, 2024) retornam status 200
 
 ### 📊 Visualizando Resultados dos Testes:
 1. Após executar uma requisição, vá para a aba **"Test Results"**
@@ -113,12 +163,18 @@ A collection inclui testes automáticos que verificam:
 4. Clique em **"Send"**
 
 ### Testar Diferentes Anos:
-- 2023, 2022, 2021, etc.
+- **Anos válidos**: 1970-2024 (validação rigorosa)
+- **Anos inválidos**: 1969, 2025, "abc" (retornam erro 400)
 - Deixe vazio para todos os anos
 
-### Testar Sub-opções:
-- `vinhos`, `sucos`, `derivados`, etc.
+### Testar Sub-opções por Endpoint:
+- **Produção**: VINHO DE MESA, VINHO FINO DE MESA (VINIFERA), SUCO DE UVA, DERIVADOS
+- **Processamento**: viniferas, americanas, mesa, semclass
+- **Comercialização**: VINHO DE MESA, ESPUMANTES, UVAS FRESCAS, SUCO DE UVA
+- **Importação**: vinhos, espumantes, frescas, passas, suco
+- **Exportação**: vinho, uva, espumantes, suco
 - Deixe vazio para todas as opções
+- **Atenção**: Sub-opções são específicas por endpoint (listas fechadas)
 
 ## 🔐 Testando Autenticação
 
@@ -154,6 +210,11 @@ A collection inclui testes automáticos que verificam:
 ### Erro 401 (Não Autorizado):
 - ✅ Verifique as credenciais na aba **"Authorization"**
 - ✅ Confirme se está usando `user1/password1` ou `user2/password2`
+
+### Erro 400 (Parâmetros Inválidos):
+- ✅ Verifique se o ano está entre 1970-2024
+- ✅ Confirme se a sub_option é válida para o endpoint específico
+- ✅ Use apenas valores numéricos para o parâmetro year
 
 ### Erro 404 (Não Encontrado):
 - ✅ Verifique se o endpoint está correto

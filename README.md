@@ -325,12 +325,14 @@ for endpoint, params in endpoints_examples.items():
 
 ## Versionamento Automático
 
-A aplicação possui um sistema de versionamento simples baseado em arquivo que incrementa a versão automaticamente.
+A aplicação possui um **sistema de versionamento simples** baseado em arquivo que incrementa a versão automaticamente a cada alteração.
 
 ### Como Funciona
 - **Arquivo de versão**: `version.txt` contém a versão atual (formato: MAJOR.MINOR.PATCH)
-- **Incremento automático**: A versão é incrementada a cada build
-- **Tipos de incremento**: major, minor, patch (padrão)
+- **Incremento automático**: A versão é incrementada automaticamente nos builds
+- **Tipos de incremento**: major (X.0.0), minor (X.Y.0), patch (X.Y.Z) - padrão
+- **Integração Docker**: Funciona tanto em ambiente local quanto em containers
+- **Fallback robusto**: Sistema funciona independente de Git ou outras dependências
 
 ### Scripts de Build e Deploy
 
@@ -339,61 +341,131 @@ A aplicação possui um sistema de versionamento simples baseado em arquivo que 
 # Build local com incremento patch (padrão)
 python build.py --type local
 
-# Build com incremento minor
+# Build com incremento minor (nova funcionalidade)
 python build.py --type local --increment minor
 
-# Build sem testes
+# Build com incremento major (breaking changes)
+python build.py --type local --increment major
+
+# Build sem executar testes
 python build.py --type local --no-tests
 ```
 
 #### Build Docker
 ```bash
-# Build Docker com incremento de versão
+# Build Docker com incremento de versão automático
 python build.py --type docker
 
-# Build para produção
+# Build para ambiente de produção
 python build.py --type docker --env production --increment minor
+
+# Build para desenvolvimento
+python build.py --type docker --env development
 ```
 
-#### Deploy Completo
+#### Deploy Completo (Recomendado)
 ```bash
-# Deploy completo (build + deploy)
+# Deploy completo: build + deploy + teste
 python build.py --type deploy
 
-# Deploy para produção
-python build.py --type deploy --env production --increment major
+# Deploy para produção com incremento minor
+python build.py --type deploy --env production --increment minor
+
+# Deploy para desenvolvimento
+python build.py --type deploy --env development
 ```
 
 ### Gerenciar Versão Manualmente
+
+#### Visualizar Versão
 ```bash
-# Ver versão atual
-python simple_version.py
+# Ver versão atual com detalhes
+python simple_version.py --show
 
-# Incrementar versão manualmente
-python simple_version.py --increment patch
-python simple_version.py --increment minor
-python simple_version.py --increment major
-
-# Definir versão específica
-python simple_version.py --set 2.0.0
-```
-
-### Verificar Versão Atual
-```bash
-# Via API (local ou Docker)
-curl http://localhost:5000/heartbeat
-
-# Via arquivo
+# Ver apenas o número da versão
 cat version.txt
 
-# Via script Python
-python simple_version.py --show
+# Ver versão via API
+curl http://localhost:5000/heartbeat
 ```
 
-### Arquivos de Versão
-- **`version.txt`**: Arquivo simples com a versão atual
-- **`simple_version.py`**: Script para gerenciar versões
-- **`build.py`**: Script de build que incrementa automaticamente
+#### Incrementar Versão
+```bash
+# Incremento patch: 1.1.0 -> 1.1.1 (correções)
+python simple_version.py --increment patch
+
+# Incremento minor: 1.1.0 -> 1.2.0 (novas funcionalidades)
+python simple_version.py --increment minor
+
+# Incremento major: 1.1.0 -> 2.0.0 (breaking changes)
+python simple_version.py --increment major
+```
+
+#### Definir Versão Específica
+```bash
+# Definir versão específica
+python simple_version.py --set 2.0.0
+
+# Resetar para versão inicial
+python simple_version.py --set 1.0.0
+```
+
+### Verificar Versão em Diferentes Ambientes
+
+#### Local
+```bash
+# Via script Python
+python simple_version.py --show
+
+# Via arquivo
+type version.txt  # Windows
+cat version.txt   # Linux/Mac
+```
+
+#### Docker
+```bash
+# Via API (container rodando)
+curl http://localhost:5000/heartbeat
+
+# Via logs do container
+docker-compose logs app | grep -i version
+
+# Via labels da imagem
+docker inspect flask-webscraping-api:latest
+```
+
+#### API Response
+```json
+{
+  "version": "1.1.0",
+  "version_info": {
+    "version": "1.1.0",
+    "build_date": "2025-01-26T10:30:00.123456",
+    "environment": "production",
+    "source": "docker"
+  }
+}
+```
+
+### Arquivos do Sistema de Versionamento
+- **`version.txt`**: Arquivo principal com a versão atual (ex: 1.1.0)
+- **`simple_version.py`**: Script para gerenciar versões manualmente
+- **`build.py`**: Script unificado de build que incrementa automaticamente
+- **`app.py`**: Aplicação Flask que lê e exibe a versão
+
+### Fluxo de Trabalho Recomendado
+1. **Desenvolvimento**: Use `python build.py --type local` para builds locais
+2. **Teste**: Use `python build.py --type deploy` para testar em Docker
+3. **Produção**: Use `python build.py --type deploy --env production --increment minor`
+4. **Hotfix**: Use `python build.py --type deploy --increment patch`
+
+### Vantagens do Sistema Simples
+- ✅ **Simplicidade**: Apenas um arquivo `version.txt`
+- ✅ **Independência**: Não depende de Git ou ferramentas externas
+- ✅ **Automação**: Incremento automático nos builds
+- ✅ **Flexibilidade**: Controle manual quando necessário
+- ✅ **Integração**: Funciona em local e Docker
+- ✅ **Visibilidade**: Versão visível na API e logs
 
 ## Desenvolvimento
 

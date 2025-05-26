@@ -1,8 +1,8 @@
 {
 	"info": {
 		"_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-		"name": "API Flask - Dados Vitivinícolas Embrapa",
-		"description": "Collection para testar a API Flask de Web Scraping que extrai dados vitivinícolas do site da Embrapa.\n\n## Funcionalidades:\n- 5 endpoints de dados (Produção, Processamento, Comercialização, Importação, Exportação)\n- Autenticação HTTP Basic\n- Filtros por ano e sub-opções\n- Parsing inteligente de tabelas HTML\n\n## Credenciais:\n- Usuário 1: user1 / password1\n- Usuário 2: user2 / password2\n\n## Base URL:\n- Local: http://localhost:5000\n\n## Parâmetros Opcionais:\n- year: Filtrar por ano específico (ex: 2023)\n- sub_option: Sub-opção para filtros adicionais",
+		"name": "API Flask - Dados Vitivinícolas Embrapa v1.1.0",
+		"description": "Collection para testar a API Flask de Web Scraping que extrai dados vitivinícolas do site da Embrapa.\n\n## Funcionalidades:\n- 5 endpoints de dados (Produção, Processamento, Comercialização, Importação, Exportação)\n- Autenticação HTTP Basic\n- Validação rigorosa de parâmetros year (1970-2024) e sub_option\n- Filtros específicos por endpoint com sub-opções validadas\n- Sistema de cache inteligente com Redis\n- Versionamento automático simples\n- Parsing inteligente de tabelas HTML\n\n## Credenciais:\n- Usuário 1: user1 / password1\n- Usuário 2: user2 / password2\n\n## Base URL:\n- Local: http://localhost:5000\n- Docker: http://localhost:5000\n\n## Parâmetros de Filtro:\n- **year**: 1970-2024 (validação rigorosa)\n- **sub_option**: Valores específicos por endpoint (listas fechadas)\n\n## Sub-opções por Endpoint:\n- **Produção**: VINHO DE MESA, VINHO FINO DE MESA (VINIFERA), SUCO DE UVA, DERIVADOS\n- **Processamento**: viniferas, americanas, mesa, semclass\n- **Comercialização**: VINHO DE MESA, ESPUMANTES, UVAS FRESCAS, SUCO DE UVA\n- **Importação**: vinhos, espumantes, frescas, passas, suco\n- **Exportação**: vinho, uva, espumantes, suco\n\n## Versão Atual: 1.1.0\n- Sistema de versionamento simples baseado em arquivo version.txt\n- Incremento automático a cada build\n- Visível no endpoint /heartbeat",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -44,21 +44,21 @@
 								{
 									"key": "year",
 									"value": "2023",
-									"description": "Ano para filtrar os dados"
+									"description": "Ano para filtrar os dados (1970-2024)"
 								}
 							]
 						},
-						"description": "Busca dados de produção filtrados por um ano específico."
+						"description": "Busca dados de produção filtrados por um ano específico. Ano deve estar entre 1970-2024."
 					},
 					"response": []
 				},
 				{
-					"name": "Dados de Produção - Com Sub-opção",
+					"name": "Dados de Produção - Vinho de Mesa",
 					"request": {
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/producao?year=2023&sub_option=vinhos",
+							"raw": "{{base_url}}/producao?year=2023&sub_option=VINHO DE MESA",
 							"host": [
 								"{{base_url}}"
 							],
@@ -69,21 +69,96 @@
 								{
 									"key": "year",
 									"value": "2023",
-									"description": "Ano para filtrar os dados"
+									"description": "Ano para filtrar os dados (1970-2024)"
 								},
 								{
 									"key": "sub_option",
-									"value": "vinhos",
-									"description": "Sub-opção para filtros adicionais"
+									"value": "VINHO DE MESA",
+									"description": "Sub-opção específica para produção"
 								}
 							]
 						},
-						"description": "Busca dados de produção com filtros de ano e sub-opção."
+						"description": "Busca dados de produção de vinho de mesa para um ano específico."
+					},
+					"response": []
+				},
+				{
+					"name": "Dados de Produção - Suco de Uva",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/producao?sub_option=SUCO DE UVA",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"producao"
+							],
+							"query": [
+								{
+									"key": "sub_option",
+									"value": "SUCO DE UVA",
+									"description": "Sub-opção específica para produção"
+								}
+							]
+						},
+						"description": "Busca dados de produção de suco de uva para todos os anos."
+					},
+					"response": []
+				},
+				{
+					"name": "Teste Validação - Ano Inválido (Deve falhar)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/producao?year=1969",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"producao"
+							],
+							"query": [
+								{
+									"key": "year",
+									"value": "1969",
+									"description": "Ano inválido (antes de 1970)"
+								}
+							]
+						},
+						"description": "Teste de validação com ano inválido. Deve retornar erro HTTP 400."
+					},
+					"response": []
+				},
+				{
+					"name": "Teste Validação - Sub-opção Inválida (Deve falhar)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/producao?sub_option=OPCAO_INEXISTENTE",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"producao"
+							],
+							"query": [
+								{
+									"key": "sub_option",
+									"value": "OPCAO_INEXISTENTE",
+									"description": "Sub-opção inválida para produção"
+								}
+							]
+						},
+						"description": "Teste de validação com sub-opção inválida. Deve retornar erro HTTP 400."
 					},
 					"response": []
 				}
 			],
-			"description": "Endpoints relacionados aos dados de produção de uvas e vinhos."
+			"description": "Endpoints relacionados aos dados de produção de uvas e vinhos.\n\nSub-opções válidas: VINHO DE MESA, VINHO FINO DE MESA (VINIFERA), SUCO DE UVA, DERIVADOS"
 		},
 		{
 			"name": "Processamento",
@@ -107,12 +182,12 @@
 					"response": []
 				},
 				{
-					"name": "Dados de Processamento - Filtrado por Ano",
+					"name": "Dados de Processamento - Viníferas",
 					"request": {
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/processamento?year=2023",
+							"raw": "{{base_url}}/processamento?year=2023&sub_option=viniferas",
 							"host": [
 								"{{base_url}}"
 							],
@@ -123,16 +198,46 @@
 								{
 									"key": "year",
 									"value": "2023",
-									"description": "Ano para filtrar os dados"
+									"description": "Ano para filtrar os dados (1970-2024)"
+								},
+								{
+									"key": "sub_option",
+									"value": "viniferas",
+									"description": "Processamento de uvas viníferas"
 								}
 							]
 						},
-						"description": "Busca dados de processamento filtrados por ano."
+						"description": "Busca dados de processamento de uvas viníferas."
+					},
+					"response": []
+				},
+				{
+					"name": "Dados de Processamento - Americanas",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/processamento?sub_option=americanas",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"processamento"
+							],
+							"query": [
+								{
+									"key": "sub_option",
+									"value": "americanas",
+									"description": "Processamento de uvas americanas"
+								}
+							]
+						},
+						"description": "Busca dados de processamento de uvas americanas."
 					},
 					"response": []
 				}
 			],
-			"description": "Endpoints relacionados aos dados de processamento de uvas e vinhos."
+			"description": "Endpoints relacionados aos dados de processamento de uvas e vinhos.\n\nSub-opções válidas: viniferas, americanas, mesa, semclass"
 		},
 		{
 			"name": "Comercialização",
@@ -156,12 +261,12 @@
 					"response": []
 				},
 				{
-					"name": "Dados de Comercialização - Filtrado por Ano",
+					"name": "Dados de Comercialização - Espumantes",
 					"request": {
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/comercializacao?year=2023",
+							"raw": "{{base_url}}/comercializacao?year=2022&sub_option=ESPUMANTES",
 							"host": [
 								"{{base_url}}"
 							],
@@ -171,17 +276,22 @@
 							"query": [
 								{
 									"key": "year",
-									"value": "2023",
-									"description": "Ano para filtrar os dados"
+									"value": "2022",
+									"description": "Ano para filtrar os dados (1970-2024)"
+								},
+								{
+									"key": "sub_option",
+									"value": "ESPUMANTES",
+									"description": "Comercialização de espumantes"
 								}
 							]
 						},
-						"description": "Busca dados de comercialização filtrados por ano."
+						"description": "Busca dados de comercialização de espumantes."
 					},
 					"response": []
 				}
 			],
-			"description": "Endpoints relacionados aos dados de comercialização de vinhos."
+			"description": "Endpoints relacionados aos dados de comercialização de vinhos.\n\nSub-opções válidas: VINHO DE MESA, ESPUMANTES, UVAS FRESCAS, SUCO DE UVA"
 		},
 		{
 			"name": "Importação",
@@ -205,12 +315,12 @@
 					"response": []
 				},
 				{
-					"name": "Dados de Importação - Filtrado por Ano",
+					"name": "Dados de Importação - Vinhos",
 					"request": {
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/importacao?year=2023",
+							"raw": "{{base_url}}/importacao?year=2023&sub_option=vinhos",
 							"host": [
 								"{{base_url}}"
 							],
@@ -221,16 +331,21 @@
 								{
 									"key": "year",
 									"value": "2023",
-									"description": "Ano para filtrar os dados"
+									"description": "Ano para filtrar os dados (1970-2024)"
+								},
+								{
+									"key": "sub_option",
+									"value": "vinhos",
+									"description": "Importação de vinhos"
 								}
 							]
 						},
-						"description": "Busca dados de importação filtrados por ano."
+						"description": "Busca dados de importação de vinhos por país."
 					},
 					"response": []
 				}
 			],
-			"description": "Endpoints relacionados aos dados de importação de vinhos e derivados."
+			"description": "Endpoints relacionados aos dados de importação de vinhos e derivados.\n\nSub-opções válidas: vinhos, espumantes, frescas, passas, suco"
 		},
 		{
 			"name": "Exportação",
@@ -254,12 +369,12 @@
 					"response": []
 				},
 				{
-					"name": "Dados de Exportação - Filtrado por Ano",
+					"name": "Dados de Exportação - Uvas",
 					"request": {
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/exportacao?year=2023",
+							"raw": "{{base_url}}/exportacao?year=2023&sub_option=uva",
 							"host": [
 								"{{base_url}}"
 							],
@@ -270,16 +385,21 @@
 								{
 									"key": "year",
 									"value": "2023",
-									"description": "Ano para filtrar os dados"
+									"description": "Ano para filtrar os dados (1970-2024)"
+								},
+								{
+									"key": "sub_option",
+									"value": "uva",
+									"description": "Exportação de uvas"
 								}
 							]
 						},
-						"description": "Busca dados de exportação filtrados por ano."
+						"description": "Busca dados de exportação de uvas por país."
 					},
 					"response": []
 				}
 			],
-			"description": "Endpoints relacionados aos dados de exportação de vinhos e derivados."
+			"description": "Endpoints relacionados aos dados de exportação de vinhos e derivados.\n\nSub-opções válidas: vinho, uva, espumantes, suco"
 		},
 		{
 			"name": "Health Check & Monitoring",
@@ -301,7 +421,7 @@
 								"heartbeat"
 							]
 						},
-						"description": "Endpoint de monitoramento da saúde da API. Não requer autenticação e retorna informações sobre o status da aplicação."
+						"description": "Endpoint de monitoramento da saúde da API. Não requer autenticação e retorna informações sobre:\n- Status da aplicação\n- Versão atual (sistema simples baseado em version.txt)\n- Informações de ambiente (local/docker)\n- Status do Redis\n- Informações de build"
 					},
 					"response": []
 				},
@@ -349,6 +469,162 @@
 				}
 			],
 			"description": "Endpoints para monitoramento da saúde da API e informações gerais."
+		},
+		{
+			"name": "Testes de Validação",
+			"item": [
+				{
+					"name": "Teste - Ano Limite Inferior (1970)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/producao?year=1970",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"producao"
+							],
+							"query": [
+								{
+									"key": "year",
+									"value": "1970",
+									"description": "Ano limite inferior válido"
+								}
+							]
+						},
+						"description": "Teste com ano limite inferior válido (1970). Deve retornar status 200."
+					},
+					"response": []
+				},
+				{
+					"name": "Teste - Ano Limite Superior (2024)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/producao?year=2024",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"producao"
+							],
+							"query": [
+								{
+									"key": "year",
+									"value": "2024",
+									"description": "Ano limite superior válido"
+								}
+							]
+						},
+						"description": "Teste com ano limite superior válido (2024). Deve retornar status 200."
+					},
+					"response": []
+				},
+				{
+					"name": "Teste - Ano Inválido Baixo (1969)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/producao?year=1969",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"producao"
+							],
+							"query": [
+								{
+									"key": "year",
+									"value": "1969",
+									"description": "Ano inválido (abaixo do limite)"
+								}
+							]
+						},
+						"description": "Teste com ano inválido (1969). Deve retornar erro HTTP 400."
+					},
+					"response": []
+				},
+				{
+					"name": "Teste - Ano Inválido Alto (2025)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/producao?year=2025",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"producao"
+							],
+							"query": [
+								{
+									"key": "year",
+									"value": "2025",
+									"description": "Ano inválido (acima do limite)"
+								}
+							]
+						},
+						"description": "Teste com ano inválido (2025). Deve retornar erro HTTP 400."
+					},
+					"response": []
+				},
+				{
+					"name": "Teste - Sub-opção Inválida Produção",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/producao?sub_option=viniferas",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"producao"
+							],
+							"query": [
+								{
+									"key": "sub_option",
+									"value": "viniferas",
+									"description": "Sub-opção de processamento usada em produção (inválida)"
+								}
+							]
+						},
+						"description": "Teste com sub-opção de outro endpoint. Deve retornar erro HTTP 400."
+					},
+					"response": []
+				},
+				{
+					"name": "Teste - Ano Não Numérico",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/producao?year=abc",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"producao"
+							],
+							"query": [
+								{
+									"key": "year",
+									"value": "abc",
+									"description": "Ano não numérico (inválido)"
+								}
+							]
+						},
+						"description": "Teste com ano não numérico. Deve retornar erro HTTP 400."
+					},
+					"response": []
+				}
+			],
+			"description": "Testes específicos para validação de parâmetros year (1970-2024) e sub_option (listas fechadas por endpoint)."
 		},
 		{
 			"name": "Testes de Autenticação",
@@ -466,7 +742,8 @@
 				"type": "text/javascript",
 				"exec": [
 					"// Script executado antes de cada requisição",
-					"console.log('Fazendo requisição para:', pm.request.url.toString());"
+					"console.log('Fazendo requisição para:', pm.request.url.toString());",
+					"console.log('Versão da API: 1.1.0 - Sistema de versionamento simples');"
 				]
 			}
 		},
@@ -482,9 +759,9 @@
 					"    pm.expect(pm.response.text()).to.not.be.empty;",
 					"});",
 					"",
-					"// Para requisições autenticadas, verificar estrutura da resposta",
-					"if (pm.response.code === 200) {",
-					"    pm.test('Response has correct structure', function () {",
+					"// Para requisições autenticadas bem-sucedidas, verificar estrutura da resposta",
+					"if (pm.response.code === 200 && !pm.request.url.toString().includes('/heartbeat') && !pm.request.url.toString().includes('/test') && !pm.request.url.toString().endsWith('/')) {",
+					"    pm.test('Response has correct data structure', function () {",
 					"        const jsonData = pm.response.json();",
 					"        pm.expect(jsonData).to.have.property('data');",
 					"        pm.expect(jsonData.data).to.have.property('header');",
@@ -492,39 +769,89 @@
 					"        pm.expect(jsonData.data).to.have.property('footer');",
 					"    });",
 					"    ",
-					"    pm.test('Response time is acceptable', function () {",
-					"        pm.expect(pm.response.responseTime).to.be.below(30000);",
+					"    pm.test('Response includes cache information', function () {",
+					"        const jsonData = pm.response.json();",
+					"        pm.expect(jsonData).to.have.property('cached');",
 					"    });",
 					"}",
 					"",
-									"// Para testes de autenticação inválida",
-				"if (pm.request.auth && pm.request.auth.type === 'noauth') {",
-				"    pm.test('Unauthorized request returns 401', function () {",
-				"        pm.expect(pm.response.code).to.equal(401);",
-				"    });",
-				"}",
-				"",
-				"// Testes específicos para heartbeat",
-				"if (pm.request.url.toString().includes('/heartbeat')) {",
-				"    pm.test('Heartbeat returns healthy status', function () {",
-				"        const jsonData = pm.response.json();",
-				"        pm.expect(jsonData).to.have.property('status', 'healthy');",
-				"        pm.expect(jsonData).to.have.property('timestamp');",
-				"        pm.expect(jsonData).to.have.property('version');",
-				"        pm.expect(jsonData).to.have.property('service');",
-				"    });",
-				"}",
-				"",
-				"// Testes específicos para home/info",
-				"if (pm.request.url.toString().endsWith('/') || pm.request.url.toString().includes('/test')) {",
-				"    pm.test('Info endpoint returns correct structure', function () {",
-				"        const jsonData = pm.response.json();",
-				"        if (jsonData.endpoints) {",
-				"            pm.expect(jsonData).to.have.property('endpoints');",
-				"            pm.expect(jsonData).to.have.property('version');",
-				"        }",
-				"    });",
-				"}"
+					"// Testes para validação de parâmetros (erro 400)",
+					"if (pm.response.code === 400) {",
+					"    pm.test('Validation error returns proper structure', function () {",
+					"        const jsonData = pm.response.json();",
+					"        pm.expect(jsonData).to.have.property('error');",
+					"        pm.expect(jsonData.error).to.be.a('string');",
+					"    });",
+					"}",
+					"",
+					"// Testes de tempo de resposta",
+					"pm.test('Response time is acceptable', function () {",
+					"    pm.expect(pm.response.responseTime).to.be.below(30000);",
+					"});",
+					"",
+					"// Para testes de autenticação inválida",
+					"if (pm.request.auth && pm.request.auth.type === 'noauth' && !pm.request.url.toString().includes('/heartbeat') && !pm.request.url.toString().includes('/test') && !pm.request.url.toString().endsWith('/')) {",
+					"    pm.test('Unauthorized request returns 401', function () {",
+					"        pm.expect(pm.response.code).to.equal(401);",
+					"    });",
+					"}",
+					"",
+					"// Testes específicos para heartbeat",
+					"if (pm.request.url.toString().includes('/heartbeat')) {",
+					"    pm.test('Heartbeat returns healthy status', function () {",
+					"        const jsonData = pm.response.json();",
+					"        pm.expect(jsonData).to.have.property('status', 'healthy');",
+					"        pm.expect(jsonData).to.have.property('timestamp');",
+					"        pm.expect(jsonData).to.have.property('version');",
+					"        pm.expect(jsonData).to.have.property('service');",
+					"    });",
+					"    ",
+					"    pm.test('Heartbeat includes version information', function () {",
+					"        const jsonData = pm.response.json();",
+					"        pm.expect(jsonData).to.have.property('version_info');",
+					"        pm.expect(jsonData.version_info).to.have.property('version');",
+					"        pm.expect(jsonData.version_info).to.have.property('build_date');",
+					"        pm.expect(jsonData.version_info).to.have.property('environment');",
+					"        pm.expect(jsonData.version_info).to.have.property('source');",
+					"    });",
+					"    ",
+					"    pm.test('Heartbeat includes cache status', function () {",
+					"        const jsonData = pm.response.json();",
+					"        pm.expect(jsonData).to.have.property('cache');",
+					"        pm.expect(jsonData.cache).to.have.property('redis_status');",
+					"    });",
+					"}",
+					"",
+					"// Testes específicos para home/info",
+					"if (pm.request.url.toString().endsWith('/') || pm.request.url.toString().includes('/test')) {",
+					"    pm.test('Info endpoint returns correct structure', function () {",
+					"        const jsonData = pm.response.json();",
+					"        if (jsonData.endpoints) {",
+					"            pm.expect(jsonData).to.have.property('endpoints');",
+					"            pm.expect(jsonData).to.have.property('version');",
+					"        }",
+					"    });",
+					"}",
+					"",
+					"// Testes específicos para validação de parâmetros",
+					"if (pm.request.url.toString().includes('year=1969') || pm.request.url.toString().includes('year=2025') || pm.request.url.toString().includes('year=abc')) {",
+					"    pm.test('Invalid year parameter returns 400', function () {",
+					"        pm.expect(pm.response.code).to.equal(400);",
+					"    });",
+					"}",
+					"",
+					"if (pm.request.url.toString().includes('sub_option=OPCAO_INEXISTENTE') || pm.request.url.toString().includes('sub_option=viniferas') && pm.request.url.toString().includes('/producao')) {",
+					"    pm.test('Invalid sub_option parameter returns 400', function () {",
+					"        pm.expect(pm.response.code).to.equal(400);",
+					"    });",
+					"}",
+					"",
+					"// Testes para anos válidos nos limites",
+					"if (pm.request.url.toString().includes('year=1970') || pm.request.url.toString().includes('year=2024')) {",
+					"    pm.test('Valid boundary year returns 200', function () {",
+					"        pm.expect(pm.response.code).to.equal(200);",
+					"    });",
+					"}"
 				]
 			}
 		}
