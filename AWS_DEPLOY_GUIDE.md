@@ -2,10 +2,34 @@
 
 Este guia mostra como fazer deploy da API Flask no AWS Elastic Beanstalk usando o console web.
 
+## 📦 Passo 0: Gerar Pacote de Deploy
+
+**ANTES DE FAZER O DEPLOY**, você precisa gerar o pacote ZIP:
+
+```bash
+# Execute no diretório do projeto
+python create_eb_package.py
+```
+
+**Saída esperada:**
+```
+📈 Incrementando versão...
+✅ Nova versão: 1.1.4
+📦 Criando pacote: flask-webscraping-api-v1.1.4-20250525-220000.zip
+📏 Tamanho: 0.01 MB
+✅ Pacote criado com sucesso!
+```
+
+**Arquivo gerado:** `flask-webscraping-api-v{versao}-{timestamp}.zip`
+
+> ⚠️ **IMPORTANTE**: Use sempre o arquivo ZIP mais recente gerado pelo script!
+
+---
+
 ## 📋 Pré-requisitos
 
 - ✅ Conta AWS ativa
-- ✅ Pacote ZIP criado (`flask-webscraping-api-v1.1.3-20250525-212648.zip`)
+- ✅ **Pacote ZIP gerado** (execute `python create_eb_package.py`)
 - ✅ Acesso ao console AWS
 
 ## 🚀 Passo a Passo do Deploy
@@ -174,10 +198,34 @@ Para melhor performance, configure ElastiCache Redis:
 
 ### Deploy de Nova Versão
 
-1. Crie novo pacote ZIP com `python create_eb_package.py`
-2. No console EB, clique em **"Upload and deploy"**
-3. Selecione o novo arquivo ZIP
-4. Aguarde o deploy
+**Passo a passo completo:**
+
+1. **Gerar novo pacote:**
+   ```bash
+   # No diretório do projeto
+   python create_eb_package.py
+   ```
+   
+2. **Verificar arquivo gerado:**
+   ```bash
+   # Exemplo de saída
+   ✅ Pacote criado: flask-webscraping-api-v1.1.5-20250525-230000.zip
+   ```
+
+3. **Fazer deploy no AWS:**
+   - Acesse o console Elastic Beanstalk
+   - Selecione seu ambiente
+   - Clique em **"Upload and deploy"**
+   - Selecione o arquivo ZIP recém-criado
+   - Aguarde o deploy (3-5 minutos)
+
+4. **Verificar deploy:**
+   ```bash
+   # Teste o health check
+   curl https://sua-app.elasticbeanstalk.com/heartbeat
+   ```
+
+> 💡 **Dica**: O script incrementa automaticamente a versão a cada execução!
 
 ### Rollback
 

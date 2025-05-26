@@ -2,8 +2,8 @@
 
 ## Informações do Deploy
 
-- **Versão**: 1.1.2
-- **Data**: 2025-05-25 21:26:48
+- **Versão**: 1.1.3
+- **Data**: 2025-05-25 21:36:54
 - **Plataforma**: AWS Elastic Beanstalk
 - **Python**: 3.11
 

@@ -100,6 +100,54 @@ python app.py
 
 A aplicação estará disponível em: `http://localhost:5000`
 
+## 🚀 Deploy em Produção (AWS Elastic Beanstalk)
+
+### Gerar Pacote de Deploy
+
+Para fazer deploy no AWS Elastic Beanstalk, primeiro gere o pacote ZIP:
+
+```bash
+# Execute no diretório do projeto
+python create_eb_package.py
+```
+
+**Saída esperada:**
+```
+📈 Incrementando versão...
+✅ Nova versão: 1.1.4
+📦 Criando pacote: flask-webscraping-api-v1.1.4-20250525-220000.zip
+📏 Tamanho: 0.01 MB
+✅ Pacote criado com sucesso!
+```
+
+### Documentação Completa de Deploy
+
+- **📋 Guia passo a passo**: [`AWS_DEPLOY_GUIDE.md`](AWS_DEPLOY_GUIDE.md)
+- **⚙️ Configurações de deploy**: [`DEPLOY_README.md`](DEPLOY_README.md)
+
+### Deploy Rápido
+
+1. **Gerar pacote**: `python create_eb_package.py`
+2. **Acessar AWS**: [Elastic Beanstalk Console](https://console.aws.amazon.com/elasticbeanstalk/)
+3. **Criar aplicação**: Python 3.11 platform
+4. **Upload**: Arquivo ZIP gerado
+5. **Configurar**: Variáveis de ambiente (ver DEPLOY_README.md)
+6. **Testar**: `https://sua-app.elasticbeanstalk.com/heartbeat`
+
+### Atualizações Futuras
+
+```bash
+# Gerar nova versão
+python create_eb_package.py
+
+# Deploy via console AWS
+# Upload do novo arquivo ZIP gerado
+```
+
+> 💡 **Versionamento automático**: O script incrementa a versão a cada execução!
+
+---
+
 ## Endpoints Disponíveis
 
 ### Autenticação
