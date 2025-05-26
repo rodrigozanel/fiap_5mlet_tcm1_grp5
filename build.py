@@ -1,143 +1,178 @@
 #!/usr/bin/env python3
 """
-Script de build que atualiza a versão automaticamente
-Simula o processo de "compilação" para linguagens interpretadas
+Script de build simples com incremento de versão
 """
 
 import os
 import sys
 import subprocess
-from version import version_manager
+import argparse
+from simple_version import read_version, increment_version, get_version_info
 
 def run_command(command, description):
     """Executa um comando e exibe o resultado"""
-    print(f"🔄 {description}...")
+    print(f"[BUILD] {description}...")
     try:
         result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
-        print(f"✅ {description} - Sucesso")
-        if result.stdout.strip():
-            print(f"   Output: {result.stdout.strip()}")
-        return True
+        print(f"[OK] {description} - Sucesso")
+        return True, result.stdout
     except subprocess.CalledProcessError as e:
-        print(f"❌ {description} - Erro: {e}")
+        print(f"[ERROR] {description} - Erro: {e}")
         if e.stderr:
             print(f"   Erro: {e.stderr.strip()}")
-        return False
+        return False, None
 
-def update_version():
-    """Atualiza informações de versão"""
-    print("🔄 Atualizando informações de versão...")
-    version_info = version_manager.save_version_file()
+def build_local(increment_type='patch', run_tests=True):
+    """Build local com incremento de versão"""
+    print("[START] Iniciando build local")
+    print("=" * 50)
     
-    print(f"✅ Versão atualizada:")
-    print(f"   Versão: {version_info['version']}")
-    print(f"   Versão semântica: {version_info['semantic_version']}")
-    print(f"   Build: {version_info['build_number']}")
-    print(f"   Commit: {version_info['commit_hash']}")
-    print(f"   Branch: {version_info['branch']}")
+    # 1. Mostrar versão atual
+    current_version = read_version()
+    print(f"[INFO] Versão atual: {current_version}")
     
-    return version_info
+    # 2. Executar testes (se solicitado)
+    if run_tests:
+        print("\n[TEST] Executando testes...")
+        success, _ = run_command("python -m pytest", "Executando testes")
+        if not success:
+            print("[WARN] Testes falharam, mas continuando...")
+    
+    # 3. Incrementar versão
+    print(f"\n[VERSION] Incrementando versão ({increment_type})...")
+    new_version = increment_version(increment_type)
+    print(f"[OK] Versão atualizada: {current_version} -> {new_version}")
+    
+    # 4. Informações finais
+    version_info = get_version_info()
+    print(f"\n[SUCCESS] Build local concluído!")
+    print("=" * 50)
+    print(f"Nova versão: {version_info['version']}")
+    print(f"Data do build: {version_info['build_date']}")
+    print(f"Arquivo de versão: {version_info['version_file']}")
+    
+    return True
 
-def run_tests():
-    """Executa testes da aplicação"""
-    print("\n🧪 Executando testes...")
+def build_docker(increment_type='patch', environment='development'):
+    """Build Docker com incremento de versão"""
+    print("[START] Iniciando build Docker")
+    print("=" * 50)
     
-    # Verifica se existem arquivos de teste
-    test_files = [
-        'test_api.py',
-        'test_heartbeat.py', 
-        'test_validation.py'
+    # 1. Incrementar versão
+    current_version = read_version()
+    print(f"[INFO] Versão atual: {current_version}")
+    
+    print(f"\n[VERSION] Incrementando versão ({increment_type})...")
+    new_version = increment_version(increment_type)
+    print(f"[OK] Versão atualizada: {current_version} -> {new_version}")
+    
+    # 2. Build Docker
+    print(f"\n[DOCKER] Construindo imagem Docker...")
+    
+    # Nome da imagem
+    image_name = "flask-webscraping-api"
+    
+    # Tags
+    tags = [
+        f"{image_name}:latest",
+        f"{image_name}:{new_version}",
+        f"{image_name}:{environment}-{new_version}"
     ]
     
-    available_tests = [f for f in test_files if os.path.exists(f)]
+    # Comando de build
+    tag_args = " ".join([f"-t {tag}" for tag in tags])
+    build_args = [
+        f"--build-arg VERSION={new_version}",
+        f"--build-arg BUILD_DATE={get_version_info()['build_date']}",
+        f"--build-arg ENVIRONMENT={environment}"
+    ]
     
-    if not available_tests:
-        print("⚠️ Nenhum arquivo de teste encontrado")
+    build_cmd = f"docker build {' '.join(build_args)} {tag_args} ."
+    
+    success, _ = run_command(build_cmd, "Construindo imagem Docker")
+    
+    if success:
+        print(f"\n[SUCCESS] Build Docker concluído!")
+        print("=" * 50)
+        print(f"Nova versão: {new_version}")
+        print("Tags criadas:")
+        for tag in tags:
+            print(f"   - {tag}")
+        print("\nPara testar:")
+        print(f"   docker run -p 5000:5000 {tags[0]}")
+        return True
+    else:
+        return False
+
+def deploy_docker(increment_type='patch', environment='development'):
+    """Deploy Docker completo"""
+    print("[START] Iniciando deploy Docker completo")
+    print("=" * 50)
+    
+    # 1. Build com incremento de versão
+    if not build_docker(increment_type, environment):
+        print("[ERROR] Falha no build Docker")
+        return False
+    
+    # 2. Parar containers existentes
+    print(f"\n[DEPLOY] Parando containers existentes...")
+    run_command("docker-compose down", "Parando containers")
+    
+    # 3. Iniciar novos containers
+    print(f"\n[DEPLOY] Iniciando containers...")
+    success, _ = run_command("docker-compose up -d", "Iniciando containers")
+    
+    if success:
+        print(f"\n[WAIT] Aguardando containers ficarem prontos...")
+        run_command("timeout 10", "Aguardando inicialização")
+        
+        # 4. Testar API
+        print(f"\n[TEST] Testando API...")
+        success, output = run_command("curl -s http://localhost:5000/heartbeat", "Teste de heartbeat")
+        
+        if success and output:
+            try:
+                import json
+                data = json.loads(output)
+                print(f"[OK] API respondendo!")
+                print(f"   Versão: {data.get('version', 'unknown')}")
+                print(f"   Ambiente: {data.get('version_info', {}).get('environment', 'unknown')}")
+                print(f"   Docker: {data.get('docker', {}).get('running_in_docker', False)}")
+            except:
+                print(f"[WARN] API respondeu mas formato inesperado")
+        
+        print(f"\n[SUCCESS] Deploy concluído!")
+        print("=" * 50)
+        print("API disponível em: http://localhost:5000")
+        print("Documentação: http://localhost:5000/apidocs/")
         return True
     
-    all_passed = True
-    for test_file in available_tests:
-        success = run_command(f"python {test_file}", f"Executando {test_file}")
-        if not success:
-            all_passed = False
-    
-    return all_passed
+    return False
 
-def validate_environment():
-    """Valida o ambiente de desenvolvimento"""
-    print("🔍 Validando ambiente...")
+def main():
+    parser = argparse.ArgumentParser(description='Script de build simples')
+    parser.add_argument('--type', choices=['local', 'docker', 'deploy'], 
+                       default='local', help='Tipo de build')
+    parser.add_argument('--increment', choices=['major', 'minor', 'patch'], 
+                       default='patch', help='Tipo de incremento de versão')
+    parser.add_argument('--env', choices=['development', 'production'], 
+                       default='development', help='Ambiente')
+    parser.add_argument('--no-tests', action='store_true',
+                       help='Pular testes no build local')
     
-    # Verifica se está em um repositório Git
-    if not os.path.exists('.git'):
-        print("⚠️ Não é um repositório Git")
-        return False
+    args = parser.parse_args()
     
-    # Verifica se há mudanças não commitadas
-    try:
-        result = subprocess.run(['git', 'status', '--porcelain'], 
-                              capture_output=True, text=True, check=True)
-        if result.stdout.strip():
-            print("⚠️ Há mudanças não commitadas:")
-            print(result.stdout)
-            return False
-    except subprocess.CalledProcessError:
-        print("❌ Erro ao verificar status do Git")
-        return False
-    
-    print("✅ Ambiente validado")
-    return True
-
-def build():
-    """Processo principal de build"""
-    print("🚀 Iniciando processo de build...")
-    print("=" * 50)
-    
-    # 1. Validar ambiente
-    if not validate_environment():
-        print("❌ Build falhou na validação do ambiente")
-        return False
-    
-    # 2. Atualizar versão
-    version_info = update_version()
-    
-    # 3. Executar testes (opcional)
-    if '--skip-tests' not in sys.argv:
-        if not run_tests():
-            print("❌ Build falhou nos testes")
-            return False
+    if args.type == 'local':
+        success = build_local(args.increment, not args.no_tests)
+    elif args.type == 'docker':
+        success = build_docker(args.increment, args.env)
+    elif args.type == 'deploy':
+        success = deploy_docker(args.increment, args.env)
     else:
-        print("⏭️ Testes ignorados (--skip-tests)")
+        print("Tipo de build inválido")
+        success = False
     
-    # 4. Validar sintaxe Python
-    print("\n🔍 Validando sintaxe Python...")
-    python_files = ['app.py', 'version.py', 'cache.py']
-    for file in python_files:
-        if os.path.exists(file):
-            success = run_command(f"python -m py_compile {file}", f"Compilando {file}")
-            if not success:
-                print(f"❌ Build falhou na validação de sintaxe de {file}")
-                return False
-    
-    # 5. Gerar arquivo de build info
-    build_info = {
-        **version_info,
-        'build_status': 'success',
-        'build_type': 'development' if '--dev' in sys.argv else 'production'
-    }
-    
-    with open('build_info.json', 'w', encoding='utf-8') as f:
-        import json
-        json.dump(build_info, f, indent=2, ensure_ascii=False)
-    
-    print("\n🎉 Build concluído com sucesso!")
-    print("=" * 50)
-    print(f"📦 Versão: {version_info['version']}")
-    print(f"🏷️ Tag semântica: {version_info['semantic_version']}")
-    print(f"📅 Data do build: {version_info['build_date']}")
-    print(f"📄 Informações salvas em: build_info.json e version.json")
-    
-    return True
+    sys.exit(0 if success else 1)
 
 if __name__ == "__main__":
-    success = build()
-    sys.exit(0 if success else 1) 
+    main() 

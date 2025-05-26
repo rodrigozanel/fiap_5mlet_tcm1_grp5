@@ -16,23 +16,35 @@ load_dotenv()
 from cache import CacheManager
 
 # Import version management
-try:
-    from version import get_version, get_simple_version
-    VERSION_INFO = get_version()
-    APP_VERSION = VERSION_INFO['version']
-except ImportError:
-    # Fallback se o módulo de versão não estiver disponível
-    APP_VERSION = "1.0.0"
-    VERSION_INFO = {
-        'version': APP_VERSION,
-        'semantic_version': APP_VERSION,
-        'build_number': 0,
-        'commit_hash': 'unknown',
-        'branch': 'unknown',
-        'commit_date': 'unknown',
-        'build_date': datetime.now().isoformat(),
-        'is_git_repo': False
-    }
+def get_version_info():
+    """Get version information from various sources"""
+    # Try Docker environment variables first
+    if os.getenv('APP_VERSION'):
+        return {
+            'version': os.getenv('APP_VERSION', '1.0.0'),
+            'build_date': os.getenv('APP_BUILD_DATE', datetime.now().isoformat()),
+            'environment': os.getenv('APP_ENVIRONMENT', 'production'),
+            'source': 'docker'
+        }
+    
+    # Try simple version file
+    try:
+        from simple_version import get_version_info as get_simple_version
+        info = get_simple_version()
+        info['environment'] = 'local'
+        info['source'] = 'file'
+        return info
+    except ImportError:
+        # Final fallback
+        return {
+            'version': "1.0.0",
+            'build_date': datetime.now().isoformat(),
+            'environment': 'unknown',
+            'source': 'fallback'
+        }
+
+VERSION_INFO = get_version_info()
+APP_VERSION = VERSION_INFO['version']
 
 app = Flask(__name__)
 
@@ -49,7 +61,7 @@ logger = logging.getLogger(__name__)
 app.config['SWAGGER'] = {
     'title': 'Flask Web Scraping API - Dados Vitivinícolas Embrapa',
     'uiversion': 3,
-    'description': f'API para extração de dados vitivinícolas do site da Embrapa via web scraping\n\nVersão: {VERSION_INFO["semantic_version"]}\nBuild: {VERSION_INFO["build_number"]}\nCommit: {VERSION_INFO["commit_hash"]}',
+    'description': f'API para extração de dados vitivinícolas do site da Embrapa via web scraping\n\nVersão: {VERSION_INFO["version"]}\nAmbiente: {VERSION_INFO["environment"]}\nData: {VERSION_INFO["build_date"]}',
     'version': APP_VERSION,
     'termsOfService': '',
     'contact': {
@@ -277,22 +289,23 @@ def heartbeat():
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "uptime": "API is running",
         "version": VERSION_INFO['version'],
-        "semantic_version": VERSION_INFO['semantic_version'],
         "service": "Flask Web Scraping API - Dados Vitivinícolas Embrapa",
         "endpoints_available": 5,
         "authentication": "HTTP Basic Auth",
-        "build_info": {
-            "build_number": VERSION_INFO['build_number'],
-            "commit_hash": VERSION_INFO['commit_hash'],
-            "branch": VERSION_INFO['branch'],
-            "commit_date": VERSION_INFO['commit_date'],
+        "version_info": {
+            "version": VERSION_INFO['version'],
             "build_date": VERSION_INFO['build_date'],
-            "is_git_repo": VERSION_INFO['is_git_repo']
+            "environment": VERSION_INFO['environment'],
+            "source": VERSION_INFO['source']
         },
         "cache": {
             "redis_status": redis_status,
             "short_cache_ttl": cache_manager.short_cache_ttl,
             "fallback_cache_ttl": cache_manager.fallback_cache_ttl
+        },
+        "docker": {
+            "running_in_docker": os.getenv('APP_VERSION') is not None,
+            "container_environment": os.getenv('APP_ENVIRONMENT', 'production')
         }
     }), 200
 

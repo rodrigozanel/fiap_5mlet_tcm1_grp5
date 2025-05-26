@@ -14,7 +14,59 @@ Esta é uma API Flask que realiza web scraping do site da Embrapa para extrair d
 
 ## Configuração do Ambiente
 
-### 1. Criar e Ativar Ambiente Virtual
+### Opção 1: Docker (Recomendado)
+
+#### Deploy Rápido com Versionamento Automático
+```bash
+# Deploy completo com rebuild e versionamento
+python docker-deploy.py
+
+# Deploy para produção
+python docker-deploy.py --env production
+
+# Deploy sem rebuild (usar imagem existente)
+python docker-deploy.py --no-rebuild
+
+# Deploy com logs
+python docker-deploy.py --logs
+```
+
+#### Comandos Docker Manuais
+```bash
+# Construir imagem com versionamento
+python docker-build.py
+
+# Construir para produção
+python docker-build.py --env production
+
+# Iniciar com docker-compose
+docker-compose up -d
+
+# Ver logs
+docker-compose logs -f app
+
+# Parar containers
+docker-compose down
+
+# Rebuild completo
+docker-compose down && docker-compose build --no-cache && docker-compose up -d
+```
+
+#### Verificar Versão no Docker
+```bash
+# Testar API e ver versão atual
+curl http://localhost:5000/heartbeat
+
+# Ver informações da imagem Docker
+docker images flask-webscraping-api
+
+# Ver labels da imagem (metadados de versão)
+docker inspect flask-webscraping-api:latest
+```
+
+### Opção 2: Ambiente Local
+
+#### 1. Criar e Ativar Ambiente Virtual
 
 **Windows:**
 ```bash
@@ -34,13 +86,13 @@ python -m venv venv
 source venv/bin/activate
 ```
 
-### 2. Instalar Dependências
+#### 2. Instalar Dependências
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Executar a Aplicação
+#### 3. Executar a Aplicação
 
 ```bash
 python app.py
@@ -270,6 +322,78 @@ for endpoint, params in endpoints_examples.items():
 - **BeautifulSoup4**: Parser HTML/XML
 - **Flask-HTTPAuth**: Autenticação HTTP Basic
 - **flasgger**: Documentação Swagger automática
+
+## Versionamento Automático
+
+A aplicação possui um sistema de versionamento simples baseado em arquivo que incrementa a versão automaticamente.
+
+### Como Funciona
+- **Arquivo de versão**: `version.txt` contém a versão atual (formato: MAJOR.MINOR.PATCH)
+- **Incremento automático**: A versão é incrementada a cada build
+- **Tipos de incremento**: major, minor, patch (padrão)
+
+### Scripts de Build e Deploy
+
+#### Build Local
+```bash
+# Build local com incremento patch (padrão)
+python build.py --type local
+
+# Build com incremento minor
+python build.py --type local --increment minor
+
+# Build sem testes
+python build.py --type local --no-tests
+```
+
+#### Build Docker
+```bash
+# Build Docker com incremento de versão
+python build.py --type docker
+
+# Build para produção
+python build.py --type docker --env production --increment minor
+```
+
+#### Deploy Completo
+```bash
+# Deploy completo (build + deploy)
+python build.py --type deploy
+
+# Deploy para produção
+python build.py --type deploy --env production --increment major
+```
+
+### Gerenciar Versão Manualmente
+```bash
+# Ver versão atual
+python simple_version.py
+
+# Incrementar versão manualmente
+python simple_version.py --increment patch
+python simple_version.py --increment minor
+python simple_version.py --increment major
+
+# Definir versão específica
+python simple_version.py --set 2.0.0
+```
+
+### Verificar Versão Atual
+```bash
+# Via API (local ou Docker)
+curl http://localhost:5000/heartbeat
+
+# Via arquivo
+cat version.txt
+
+# Via script Python
+python simple_version.py --show
+```
+
+### Arquivos de Versão
+- **`version.txt`**: Arquivo simples com a versão atual
+- **`simple_version.py`**: Script para gerenciar versões
+- **`build.py`**: Script de build que incrementa automaticamente
 
 ## Desenvolvimento
 
