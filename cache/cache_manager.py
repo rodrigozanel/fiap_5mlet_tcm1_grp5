@@ -18,13 +18,13 @@ class CacheManager:
     """
     Manages two-layer caching system:
     1. Short-term cache: For HTTP request responses (default: 5 minutes)
-    2. Fallback cache: For web scraping data when source is unavailable (default: 24 hours)
+    2. Fallback cache: For web scraping data when source is unavailable (default: 30 days)
     """
     
     def __init__(self):
         # Get cache TTL values from environment variables
         self.short_cache_ttl = int(os.getenv('SHORT_CACHE_TTL', 300))  # 5 minutes
-        self.fallback_cache_ttl = int(os.getenv('FALLBACK_CACHE_TTL', 86400))  # 24 hours
+        self.fallback_cache_ttl = int(os.getenv('FALLBACK_CACHE_TTL', 2592000))  # 30 days
         
         # Cache key prefixes
         self.short_cache_prefix = "short:"

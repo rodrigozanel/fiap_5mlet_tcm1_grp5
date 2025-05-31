@@ -393,7 +393,7 @@ test_cache_performance()
 ### Indicadores de Cache
 - `"cached": false` - Dados frescos obtidos via web scraping
 - `"cached": "short_term"` - Dados do cache de curto prazo (5 min)
-- `"cached": "fallback"` - Dados do cache de fallback (24h)
+- `"cached": "fallback"` - Dados do cache de fallback (30 dias)
 
 ## Dependências Principais
 
@@ -418,7 +418,7 @@ A aplicação implementa um **sistema de cache de duas camadas** usando Redis pa
 
 #### 🛡️ Cache de Fallback (Fallback Cache)
 - **Finalidade**: Garantir disponibilidade quando o site fonte está indisponível
-- **TTL padrão**: 24 horas (86400 segundos)
+- **TTL padrão**: 30 dias (2592000 segundos)
 - **Prefixo**: `fallback:`
 - **Uso**: Dados de backup para situações de emergência
 
@@ -456,7 +456,7 @@ graph TD
 SHORT_CACHE_TTL=300          # 5 minutos (padrão)
 
 # Cache de fallback (em segundos)  
-FALLBACK_CACHE_TTL=86400     # 24 horas (padrão)
+FALLBACK_CACHE_TTL=2592000     # 30 dias (padrão)
 
 # Configuração Redis (opcional)
 REDIS_HOST=localhost         # Host do Redis
@@ -476,7 +476,7 @@ services:
   app:
     environment:
       - SHORT_CACHE_TTL=300
-      - FALLBACK_CACHE_TTL=86400
+      - FALLBACK_CACHE_TTL=2592000
 ```
 
 ### Chaves de Cache
@@ -534,7 +534,7 @@ curl http://localhost:5000/heartbeat
   "cache": {
     "redis_status": "connected",
     "short_cache_ttl": 300,
-    "fallback_cache_ttl": 86400
+    "fallback_cache_ttl": 2592000
   }
 }
 ```
@@ -552,7 +552,7 @@ curl http://localhost:5000/heartbeat
 
 #### 🛡️ Disponibilidade
 - **Tolerância a falhas**: Funciona mesmo se o site da Embrapa estiver fora do ar
-- **Dados históricos**: Cache de fallback mantém dados por 24 horas
+- **Dados históricos**: Cache de fallback mantém dados por 30 dias
 - **Graceful degradation**: Degrada graciosamente em caso de problemas
 
 #### 📊 Observabilidade
@@ -601,6 +601,156 @@ FALLBACK_CACHE_TTL=604800
 #### 🚨 Emergência
 - Site da Embrapa indisponível
 - API continua funcionando com dados em cache
+
+### Detalhes de Implementação Técnica
+
+#### Arquitetura do Módulo Cache
+```
+cache/
+├── __init__.py          # Exposição das classes principais
+├── cache_manager.py     # Gerenciador principal de cache
+└── redis_client.py      # Cliente Redis com singleton pattern
+```
+
+#### Classe CacheManager
+A classe `CacheManager` implementa toda a lógica de cache com os seguintes métodos principais:
+
+```python
+# Métodos de cache de curto prazo
+get_short_cache(endpoint, params)    # Busca dados no cache de 5min
+set_short_cache(endpoint, data, params)  # Armazena no cache de 5min
+
+# Métodos de cache de fallback  
+get_fallback_cache(endpoint, params)     # Busca dados no cache de 30d
+set_fallback_cache(endpoint, data, params)   # Armazena no cache de 30d
+
+# Utilitários
+clear_cache(endpoint, cache_type)    # Limpa cache específico
+get_cache_stats()                    # Estatísticas do cache
+```
+
+#### Geração de Chaves Únicas
+```python
+# Algoritmo de geração de chave cache
+def _generate_cache_key(prefix, endpoint, params):
+    key_data = {
+        'endpoint': endpoint,
+        'params': params or {}
+    }
+    key_string = json.dumps(key_data, sort_keys=True)
+    key_hash = hashlib.md5(key_string.encode()).hexdigest()
+    return f"{prefix}{endpoint}:{key_hash}"
+
+# Exemplos de chaves geradas:
+# short:producao:a1b2c3d4e5f6789...
+# fallback:exportacao:9f8e7d6c5b4a321...
+```
+
+#### Serialização de Dados
+Todos os dados são serializados em JSON com metadados:
+```json
+{
+  "data": { /* dados originais */ },
+  "timestamp": "2025-01-26T10:30:00.123456+00:00",
+  "cached": true
+}
+```
+
+#### Tratamento de Conexão Redis
+- **Singleton Pattern**: Uma única instância Redis por aplicação
+- **Connection Pooling**: Reutilização de conexões
+- **Timeout Configuration**: 5s para conexão e operações
+- **Health Checks**: Verificação automática de disponibilidade
+- **Graceful Fallback**: Aplicação funciona sem Redis
+
+#### Configurações Redis Avançadas
+```python
+redis.Redis(
+    host=redis_host,
+    port=redis_port,
+    db=redis_db,
+    password=redis_password,
+    decode_responses=True,        # Decodifica strings automaticamente
+    socket_connect_timeout=5,     # Timeout de conexão
+    socket_timeout=5,             # Timeout de operação
+    retry_on_timeout=True,        # Retry automático
+    health_check_interval=30      # Verificação de saúde
+)
+```
+
+#### Integração com Endpoints
+A função `get_content_with_cache()` orquestra toda a estratégia:
+```python
+def get_content_with_cache(endpoint_name, url, params=None):
+    # 1. Tenta cache curto (5min)
+    cached_response = cache_manager.get_short_cache(endpoint_name, params)
+    if cached_response:
+        return cached_response['data'], cached_response['cached']
+    
+    # 2. Tenta web scraping
+    try:
+        response = requests.get(url, timeout=30)
+        parsed_data = parse_html_content(response.text)
+        
+        # Armazena em ambos os caches
+        cache_manager.set_short_cache(endpoint_name, parsed_data, params)
+        cache_manager.set_fallback_cache(endpoint_name, parsed_data, params)
+        
+        return parsed_data, False
+    except requests.RequestException:
+        # 3. Tenta cache fallback (30d)
+        cached_response = cache_manager.get_fallback_cache(endpoint_name, params)
+        if cached_response:
+            return cached_response['data'], cached_response['cached']
+        
+        return None, False
+```
+
+#### Logging e Monitoramento
+Sistema de logs detalhado para debug e monitoramento:
+```python
+# Logs de cache hit/miss
+logger.info(f"Short cache hit for {endpoint}")
+logger.debug(f"Short cache miss for {endpoint}")
+logger.warning(f"Redis not available for cache storage")
+logger.error(f"Error retrieving from cache: {error}")
+
+# Logs de operações
+logger.info(f"Data cached (TTL: {ttl}s)")
+logger.info(f"Cleared {count} cache entries")
+```
+
+#### Variáveis de Ambiente Suportadas
+```bash
+# Configuração Redis
+REDIS_HOST=localhost           # Default: localhost
+REDIS_PORT=6379               # Default: 6379
+REDIS_DB=0                    # Default: 0
+REDIS_PASSWORD=               # Default: None
+
+# Configuração Cache TTL
+SHORT_CACHE_TTL=300           # Default: 300 (5 min)
+FALLBACK_CACHE_TTL=2592000      # Default: 2592000 (30 days)
+
+# Configuração Aplicação  
+LOG_LEVEL=INFO                # Default: INFO
+```
+
+#### Métodos de Debug
+```bash
+# Via Python REPL (com aplicação rodando)
+from cache import CacheManager
+cache_manager = CacheManager()
+
+# Ver estatísticas
+stats = cache_manager.get_cache_stats()
+print(stats)
+
+# Limpar cache específico
+cache_manager.clear_cache('producao', 'short')
+cache_manager.clear_cache('exportacao', 'fallback')
+cache_manager.clear_cache(None, 'all')  # Limpa tudo
+```
 
 ## Versionamento Automático
 

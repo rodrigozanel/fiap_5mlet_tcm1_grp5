@@ -2,8 +2,8 @@
 
 ## Informações do Deploy
 
-- **Versão**: 1.1.3
-- **Data**: 2025-05-25 21:36:54
+- **Versão**: 1.1.4
+- **Data**: 2025-05-25 21:37:48
 - **Plataforma**: AWS Elastic Beanstalk
 - **Python**: 3.11
 
@@ -23,7 +23,7 @@
 ```
 FLASK_ENV=production
 SHORT_CACHE_TTL=300
-FALLBACK_CACHE_TTL=86400
+FALLBACK_CACHE_TTL=2592000
 REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_DB=0

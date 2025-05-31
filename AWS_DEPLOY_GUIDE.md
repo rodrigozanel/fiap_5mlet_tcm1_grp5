@@ -85,7 +85,7 @@ Clique em **"Configure more options"** para configurações detalhadas:
   ```
   FLASK_ENV = production
   SHORT_CACHE_TTL = 300
-  FALLBACK_CACHE_TTL = 86400
+  FALLBACK_CACHE_TTL = 2592000
   REDIS_HOST = localhost
   REDIS_PORT = 6379
   REDIS_DB = 0
