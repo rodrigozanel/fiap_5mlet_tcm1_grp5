@@ -662,7 +662,7 @@ print(csv_data)
 
 #### Configuração de TTL Personalizada
 ```bash
-# Cache mais agressivo (1 minuto)  
+# Cache mais agressivo (1 minuto)
 SHORT_CACHE_TTL=60
 
 # Cache de fallback mais longo (7 dias)

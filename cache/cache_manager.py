@@ -644,7 +644,7 @@ class CacheManager:
                 current_year = datetime.now().year
                 logger.debug(f"No year parameter or data year found, using current year: {current_year}")
                 return str(current_year)
-                
+            
         except Exception as e:
             logger.warning(f"Failed to extract year from data: {e}")
         

@@ -430,7 +430,7 @@ def get_content_with_cache(endpoint_name, url, cache_manager, logger, params=Non
         # All three layers failed
         logger.critical(f"💥 ALL LAYERS FAILED for {endpoint_name}: {error_context}")
         return None, False
-        
+    
     except Exception as e:
         logger.critical(f"💥 CRITICAL ERROR in get_content_with_cache for {endpoint_name}: {e}", exc_info=True)
         error_context['critical_error'] = str(e)
