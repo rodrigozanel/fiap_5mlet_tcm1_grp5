@@ -248,13 +248,90 @@ def get_content_with_cache(endpoint_name, url, cache_manager, logger, params=Non
         'params': params or {}
     }
     
+    def enrich_response_with_metadata(data, cached_flag, cache_manager, endpoint_name, params):
+        """
+        Enrich response data with year and TTL information.
+        """
+        try:
+            if not isinstance(data, dict):
+                return data
+            
+            # Get TTL information for caches
+            ttl_info = cache_manager.get_cache_ttl_info(endpoint_name, params)
+            
+            # Extract year from data or parameters
+            year = cache_manager.extract_year_from_data(data, params)
+            
+            # Define layer descriptions
+            layer_descriptions = {
+                "short_term": "Fast cache (5 minutes)",
+                "fallback": "Backup cache (30 days)", 
+                "csv_fallback": "Local file fallback",
+                False: "Real-time web scraping",
+                "fresh_data": "Real-time web scraping"
+            }
+            
+            # Add year directly to the data structure for easier access
+            if 'data' in data and isinstance(data['data'], dict):
+                data['data']['year'] = year
+            
+            # Add metadata to response
+            if 'metadata' not in data:
+                data['metadata'] = {}
+            
+            data['metadata']['year'] = year
+            data['metadata']['cache_ttl'] = ttl_info
+            data['metadata']['cache_status'] = {
+                "active_layer": cached_flag if cached_flag else "fresh_data",
+                "layer_description": layer_descriptions.get(cached_flag, "Real-time web scraping")
+            }
+            
+            # Debug logging
+            logger.debug(f"Enriched metadata: year={year}, ttl_info={ttl_info}, cached_flag={cached_flag}")
+            logger.debug(f"Added year to data structure: {data.get('data', {}).get('year', 'not_added')}")
+            
+            return data
+            
+        except Exception as e:
+            logger.warning(f"Failed to enrich response with metadata: {e}")
+            # Still add basic metadata even if enrichment fails
+            if isinstance(data, dict):
+                if 'metadata' not in data:
+                    data['metadata'] = {}
+                
+                # Try to get year from params at least
+                fallback_year = params.get('year', 'unknown') if params else 'unknown'
+                if not fallback_year or fallback_year == 'unknown':
+                    # Try current year as last resort
+                    from datetime import datetime
+                    fallback_year = str(datetime.now().year)
+                
+                # Add year to data structure
+                if 'data' in data and isinstance(data['data'], dict):
+                    data['data']['year'] = fallback_year
+                    
+                data['metadata']['year'] = fallback_year
+                data['metadata']['cache_ttl'] = {}
+                data['metadata']['cache_status'] = {
+                    "active_layer": cached_flag if cached_flag else "fresh_data", 
+                    "layer_description": "Unknown"
+                }
+            return data
+    
     try:
         # Layer 1: Try short-term cache first
         logger.debug(f"Attempting Layer 1 (short-term cache) for {endpoint_name}")
         cached_response = cache_manager.get_short_cache(endpoint_name, params)
         if cached_response:
             logger.info(f"✅ Layer 1 HIT: Returning short-term cache data for {endpoint_name}")
-            return cached_response['data'], cached_response['cached']
+            enriched_data = enrich_response_with_metadata(
+                cached_response['data'], 
+                cached_response['cached'], 
+                cache_manager, 
+                endpoint_name, 
+                params
+            )
+            return enriched_data, cached_response['cached']
         
         logger.debug(f"Layer 1 MISS: No short-term cache for {endpoint_name}")
         
@@ -280,7 +357,15 @@ def get_content_with_cache(endpoint_name, url, cache_manager, logger, params=Non
                 logger.warning(f"⚠️ Failed to cache fresh data for {endpoint_name}: {cache_error}")
                 # Continue without caching, we still have the data
             
-            return parsed_data, False
+            # Enrich with metadata
+            enriched_data = enrich_response_with_metadata(
+                parsed_data, 
+                False,  # Fresh data, not cached
+                cache_manager, 
+                endpoint_name, 
+                params
+            )
+            return enriched_data, False
             
         except requests.exceptions.Timeout as e:
             logger.error(f"❌ Web scraping TIMEOUT for {endpoint_name}: {e}")
@@ -307,7 +392,14 @@ def get_content_with_cache(endpoint_name, url, cache_manager, logger, params=Non
             cached_response = cache_manager.get_fallback_cache(endpoint_name, params)
             if cached_response:
                 logger.warning(f"⚠️ Layer 2 HIT: Returning fallback cache data for {endpoint_name} due to scraping failure")
-                return cached_response['data'], cached_response['cached']
+                enriched_data = enrich_response_with_metadata(
+                    cached_response['data'], 
+                    cached_response['cached'], 
+                    cache_manager, 
+                    endpoint_name, 
+                    params
+                )
+                return enriched_data, cached_response['cached']
             
             logger.debug(f"Layer 2 MISS: No fallback cache for {endpoint_name}")
         except Exception as fallback_error:
@@ -320,7 +412,14 @@ def get_content_with_cache(endpoint_name, url, cache_manager, logger, params=Non
             csv_response = cache_manager.get_csv_fallback(endpoint_name, params)
             if csv_response:
                 logger.warning(f"⚠️ Layer 3 HIT: Returning CSV fallback data for {endpoint_name} due to Redis failure")
-                return csv_response, csv_response['cached']
+                enriched_data = enrich_response_with_metadata(
+                    csv_response, 
+                    csv_response['cached'], 
+                    cache_manager, 
+                    endpoint_name, 
+                    params
+                )
+                return enriched_data, csv_response['cached']
             
             logger.debug(f"Layer 3 MISS: No CSV fallback data for {endpoint_name}")
             error_context['csv_fallback_status'] = 'No data available'
@@ -342,7 +441,14 @@ def get_content_with_cache(endpoint_name, url, cache_manager, logger, params=Non
             csv_response = cache_manager.get_csv_fallback(endpoint_name, params)
             if csv_response:
                 logger.warning(f"🚨 EMERGENCY SUCCESS: CSV fallback worked for {endpoint_name}")
-                return csv_response, csv_response['cached']
+                enriched_data = enrich_response_with_metadata(
+                    csv_response, 
+                    csv_response['cached'], 
+                    cache_manager, 
+                    endpoint_name, 
+                    params
+                )
+                return enriched_data, csv_response['cached']
         except Exception as emergency_error:
             logger.critical(f"💥 EMERGENCY FALLBACK FAILED for {endpoint_name}: {emergency_error}")
             error_context['emergency_fallback_error'] = str(emergency_error)

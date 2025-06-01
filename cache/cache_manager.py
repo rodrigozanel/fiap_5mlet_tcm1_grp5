@@ -498,4 +498,155 @@ class CacheManager:
             "health": "excellent" if active_layers == 3 else "good" if active_layers >= 2 else "fair" if active_layers == 1 else "poor"
         }
         
-        return stats 
+        return stats
+
+    def get_cache_ttl_info(self, endpoint_name: str, params: dict = None) -> dict:
+        """
+        Get TTL information for both short-term and fallback cache.
+        
+        Args:
+            endpoint_name (str): Name of the endpoint
+            params (dict): Request parameters for cache key generation
+            
+        Returns:
+            dict: TTL information for each cache layer
+        """
+        ttl_info = {
+            "short_cache_ttl": None,
+            "fallback_cache_ttl": None,
+            "csv_fallback_ttl": "indefinite"  # CSV files don't expire
+        }
+        
+        try:
+            # Generate cache keys using the correct parameter order
+            short_cache_key = self._generate_cache_key(self.short_cache_prefix, endpoint_name, params)
+            fallback_cache_key = self._generate_cache_key(self.fallback_cache_prefix, endpoint_name, params)
+            
+            # Get TTL for caches if Redis is available
+            redis_client = get_redis_client()
+            if redis_client:
+                try:
+                    # Get TTL for short cache
+                    short_ttl = redis_client.ttl(short_cache_key)
+                    if short_ttl > 0:
+                        ttl_info["short_cache_ttl"] = short_ttl
+                    elif short_ttl == -1:
+                        ttl_info["short_cache_ttl"] = "no_expiry"
+                    else:
+                        ttl_info["short_cache_ttl"] = None  # Key doesn't exist
+                        
+                    # Get TTL for fallback cache
+                    fallback_ttl = redis_client.ttl(fallback_cache_key)
+                    if fallback_ttl > 0:
+                        ttl_info["fallback_cache_ttl"] = fallback_ttl
+                    elif fallback_ttl == -1:
+                        ttl_info["fallback_cache_ttl"] = "no_expiry"
+                    else:
+                        ttl_info["fallback_cache_ttl"] = None  # Key doesn't exist
+                        
+                    logger.debug(f"TTL info retrieved for {endpoint_name}: short={short_ttl}, fallback={fallback_ttl}")
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to get TTL info from Redis: {e}")
+            else:
+                logger.warning(f"Redis not available for TTL info retrieval")
+                ttl_info["short_cache_ttl"] = "redis_unavailable"
+                ttl_info["fallback_cache_ttl"] = "redis_unavailable"
+                    
+        except Exception as e:
+            logger.error(f"Error getting TTL info for {endpoint_name}: {e}")
+            
+        return ttl_info
+
+    def extract_year_from_data(self, data: dict, params: dict = None) -> str:
+        """
+        Extract year from response data or parameters.
+        
+        Args:
+            data (dict): Response data to extract year from
+            params (dict): Request parameters
+            
+        Returns:
+            str: Extracted year or 'unknown'
+        """
+        try:
+            # First try to get year from parameters (most reliable)
+            if params and params.get('year'):
+                year_str = str(params['year'])
+                logger.debug(f"Year extracted from parameters: {year_str}")
+                return year_str
+            
+            # Try to extract year from data headers or content
+            if isinstance(data, dict) and 'data' in data:
+                table_data = data['data']
+                
+                # Look in headers for year information
+                if 'header' in table_data and table_data['header']:
+                    for header_row in table_data['header']:
+                        if isinstance(header_row, list):
+                            for cell in header_row:
+                                if isinstance(cell, str):
+                                    # Look for 4-digit years (2020-2024)
+                                    import re
+                                    year_match = re.search(r'\b(20[0-9]{2})\b', cell)
+                                    if year_match:
+                                        year_found = year_match.group(1)
+                                        logger.debug(f"Year extracted from header: {year_found}")
+                                        return year_found
+                        elif isinstance(header_row, str):
+                            # Handle single string headers
+                            import re
+                            year_match = re.search(r'\b(20[0-9]{2})\b', header_row)
+                            if year_match:
+                                year_found = year_match.group(1)
+                                logger.debug(f"Year extracted from header string: {year_found}")
+                                return year_found
+                
+                # Look in footer for year information (often has totals with years)
+                if 'footer' in table_data and table_data['footer']:
+                    for footer_row in table_data['footer']:
+                        if isinstance(footer_row, list):
+                            for cell in footer_row:
+                                if isinstance(cell, str):
+                                    import re
+                                    year_match = re.search(r'\b(20[0-9]{2})\b', cell)
+                                    if year_match:
+                                        year_found = year_match.group(1)
+                                        logger.debug(f"Year extracted from footer: {year_found}")
+                                        return year_found
+                        elif isinstance(footer_row, str):
+                            import re
+                            year_match = re.search(r'\b(20[0-9]{2})\b', footer_row)
+                            if year_match:
+                                year_found = year_match.group(1)
+                                logger.debug(f"Year extracted from footer string: {year_found}")
+                                return year_found
+                
+                # Look in body data for year information (first few rows)
+                if 'body' in table_data and table_data['body']:
+                    # Check first few items for year info
+                    for item in table_data['body'][:3]:
+                        if isinstance(item, dict):
+                            item_data = item.get('item_data', [])
+                            if isinstance(item_data, list):
+                                for cell in item_data:
+                                    if isinstance(cell, str):
+                                        import re
+                                        year_match = re.search(r'\b(20[0-9]{2})\b', cell)
+                                        if year_match:
+                                            year_found = year_match.group(1)
+                                            logger.debug(f"Year extracted from body: {year_found}")
+                                            return year_found
+            
+            # If no year found in data and no params provided, try to get current year from site or use current year
+            if not params or not params.get('year'):
+                from datetime import datetime
+                current_year = datetime.now().year
+                logger.debug(f"No year parameter or data year found, using current year: {current_year}")
+                return str(current_year)
+                
+        except Exception as e:
+            logger.warning(f"Failed to extract year from data: {e}")
+        
+        logger.warning("Could not extract year from any source, returning 'unknown'")
+        return "unknown" 

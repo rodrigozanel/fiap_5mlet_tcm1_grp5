@@ -297,49 +297,123 @@ def producao():
           properties:
             data:
               type: object
-              description: Dados estruturados extraídos das tabelas
               properties:
                 header:
                   type: array
-                  description: Cabeçalhos das tabelas
+                  items:
+                    type: array
+                    items:
+                      type: string
+                  description: Cabeçalhos da tabela
                 body:
                   type: array
-                  description: Dados principais das tabelas
+                  items:
+                    type: object
+                    properties:
+                      item_data:
+                        type: array
+                        items:
+                          type: string
+                      sub_items:
+                        type: array
+                        items:
+                          type: array
+                          items:
+                            type: string
+                  description: Dados principais da tabela
                 footer:
                   type: array
-                  description: Rodapés das tabelas (totais, somas)
+                  items:
+                    type: array
+                    items:
+                      type: string
+                  description: Rodapé da tabela (totais)
             cached:
               type: string
               enum: [false, "short_term", "fallback", "csv_fallback"]
-              description: Fonte dos dados (cache ou web scraping)
-              example: "short_term"
+              description: Estado do cache usado para obter os dados
+            year:
+              type: string
+              description: Ano dos dados retornados (extraído automaticamente ou do parâmetro)
+              example: "2024"
+            cache_info:
+              type: object
+              properties:
+                active_cache_layer:
+                  type: string
+                  description: Camada de cache ativa utilizada
+                  example: "short_term"
+                layer_description:
+                  type: string
+                  description: Descrição da camada de cache utilizada
+                  example: "Fast cache (5 minutes)"
+                ttl_seconds:
+                  type: object
+                  properties:
+                    short_cache:
+                      type: [integer, string, "null"]
+                      description: TTL em segundos do cache curto prazo (null se não existir)
+                      example: 245
+                    fallback_cache:
+                      type: [integer, string, "null"]
+                      description: TTL em segundos do cache fallback (null se não existir)
+                      example: 2547891
+                    csv_fallback:
+                      type: string
+                      description: TTL do fallback CSV (sempre 'indefinite')
+                      example: "indefinite"
+              description: Informações detalhadas sobre TTL das camadas de cache
+            cache_expires_in:
+              type: string
+              description: Tempo até expiração do cache em formato humano
+              example: "4m 5s"
             data_source:
               type: string
-              description: Descrição da fonte dos dados quando CSV fallback é usado
-              example: "Local CSV files (Redis unavailable)"
+              description: Fonte dos dados retornados
+              example: "Redis short_term cache"
             freshness:
               type: string
-              description: Informação sobre a atualidade dos dados
-              example: "Cached data from short-term cache (5 minutes)"
+              description: Nível de atualização dos dados
+              example: "Cached data"
+            endpoint:
+              type: string
+              description: Nome do endpoint
+              example: "producao"
+            status:
+              type: string
+              description: Status da operação
+              example: "success"
+            metadata:
+              type: object
+              description: Metadados técnicos detalhados (informações internas)
       400:
-        description: Parâmetros inválidos.
+        description: Parâmetros inválidos (ano fora do range ou sub-opção inválida).
         schema:
           type: object
           properties:
             error:
               type: string
-              description: Mensagem de erro de validação
-      401:
-        description: Autenticação necessária.
+              description: Mensagem de erro
+            provided_params:
+              type: object
+              description: Parâmetros fornecidos
+            status:
+              type: string
+              example: "parameter_error"
       503:
-        description: Serviço indisponível - todas as camadas de cache falharam.
+        description: Dados temporariamente indisponíveis (todas as camadas de cache falharam).
         schema:
           type: object
           properties:
             error:
               type: string
-              description: Mensagem explicando que todas as fontes de dados falharam
-              example: "Failed to fetch data and no cache available"
+              example: "Data temporarily unavailable"
+            troubleshooting:
+              type: object
+              description: Sugestões para resolução do problema
+            system_status:
+              type: object
+              description: Status das camadas de cache
     """
     return handle_producao(cache_manager, logger)
 
