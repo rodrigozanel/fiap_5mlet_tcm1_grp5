@@ -157,13 +157,11 @@ def verify_password(username, password):
 @app.route("/heartbeat", methods=["GET"])
 def heartbeat():
     """
-    Endpoint de heartbeat para monitoramento da saúde da API com sistema de cache três camadas.
+    API health check endpoint.
     ---
-    tags:
-      - Health Check
     responses:
       200:
-        description: API está funcionando corretamente com status completo do sistema de cache.
+        description: API is running and healthy
         schema:
           type: object
           properties:
@@ -172,101 +170,40 @@ def heartbeat():
               example: "healthy"
             timestamp:
               type: string
-              example: "2025-01-26T01:48:00Z"
-            uptime:
+              example: "2023-01-01T00:00:00Z"
+            redis:
               type: string
-              example: "API is running"
-            version:
+              example: "connected"
+            csv_fallback:
               type: string
-              example: "1.0.0"
-            service:
-              type: string
-              example: "Flask Web Scraping API - Dados Vitivinícolas Embrapa"
-            endpoints_available:
-              type: integer
-              example: 5
-            authentication:
-              type: string
-              example: "HTTP Basic Auth"
-            version_info:
-              type: object
-              properties:
-                version:
-                  type: string
-                  example: "1.0.0"
-                build_date:
-                  type: string
-                  example: "2025-01-26T13:45:00.123456"
-                environment:
-                  type: string
-                  example: "production"
-                source:
-                  type: string
-                  example: "docker"
-            cache:
-              type: object
-              properties:
-                redis_status:
-                  type: string
-                  enum: ["connected", "disconnected"]
-                  example: "connected"
-                short_cache_ttl:
-                  type: integer
-                  example: 300
-                  description: "TTL do cache curto prazo em segundos"
-                fallback_cache_ttl:
-                  type: integer
-                  example: 2592000
-                  description: "TTL do cache fallback em segundos"
-                csv_fallback_available:
-                  type: boolean
-                  example: true
-                  description: "Indica se o sistema CSV fallback está disponível"
-                active_layers:
-                  type: array
-                  items:
-                    type: string
-                  example: ["short_term", "fallback", "csv_fallback"]
-                  description: "Camadas de cache ativas no momento"
-            docker:
-              type: object
-              properties:
-                running_in_docker:
-                  type: boolean
-                  example: true
-                container_environment:
-                  type: string
-                  example: "production"
+              example: "available"
     """
-    # Check Redis connection
-    redis_status = "connected" if cache_manager.redis_client and cache_manager.redis_client.ping() else "disconnected"
-    
-    return jsonify({
-        "status": "healthy",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "uptime": "API is running",
-        "version": VERSION_INFO['version'],
-        "service": "Flask Web Scraping API - Dados Vitivinícolas Embrapa",
-        "endpoints_available": 5,
-        "authentication": "HTTP Basic Auth",
-        "version_info": {
-            "version": VERSION_INFO['version'],
-            "build_date": VERSION_INFO['build_date'],
-            "environment": VERSION_INFO['environment'],
-            "source": VERSION_INFO['source']
-        },
-        "cache": {
-            "redis_status": redis_status,
-            "short_cache_ttl": cache_manager.short_cache_ttl,
-            "fallback_cache_ttl": cache_manager.fallback_cache_ttl,
-            "csv_fallback_available": True,
-            "active_layers": ["short_term", "fallback", "csv_fallback"]
-        },
-        "docker": {
-            "running_in_docker": os.getenv('APP_VERSION') is not None,
-            "container_environment": os.getenv('APP_ENVIRONMENT', 'production')
-        }
-    }), 200
+    try:
+        # Check Redis connection safely
+        redis_status = "disconnected"
+        try:
+            if cache_manager.redis_client:
+                cache_manager.redis_client.ping()
+                redis_status = "connected"
+        except Exception:
+            redis_status = "disconnected"
+        
+        # Check CSV fallback
+        csv_status = "available" if cache_manager.csv_fallback else "unavailable"
+        
+        return jsonify({
+            "status": "healthy",
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "redis": redis_status,
+            "csv_fallback": csv_status
+        }), 200
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return jsonify({
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }), 500
 
 
 @app.route("/producao", methods=["GET"])
@@ -281,8 +218,8 @@ def producao():
         type: integer
         minimum: 1970
         maximum: 2024
-        required: false
-        description: O ano para filtrar os dados (1970-2024).
+        required: true
+        description: O ano para filtrar os dados (1970-2024). Campo obrigatório.
       - name: sub_option
         in: query
         type: string
@@ -430,8 +367,8 @@ def processamento():
         type: integer
         minimum: 1970
         maximum: 2024
-        required: false
-        description: O ano para filtrar os dados (1970-2024).
+        required: true
+        description: O ano para filtrar os dados (1970-2024). Campo obrigatório.
       - name: sub_option
         in: query
         type: string
@@ -478,8 +415,8 @@ def comercializacao():
         type: integer
         minimum: 1970
         maximum: 2024
-        required: false
-        description: O ano para filtrar os dados (1970-2024).
+        required: true
+        description: O ano para filtrar os dados (1970-2024). Campo obrigatório.
       - name: sub_option
         in: query
         type: string
@@ -527,8 +464,8 @@ def importacao():
         type: integer
         minimum: 1970
         maximum: 2024
-        required: false
-        description: O ano para filtrar os dados (1970-2024).
+        required: true
+        description: O ano para filtrar os dados (1970-2024). Campo obrigatório.
       - name: sub_option
         in: query
         type: string
@@ -575,8 +512,8 @@ def exportacao():
         type: integer
         minimum: 1970
         maximum: 2024
-        required: false
-        description: O ano para filtrar os dados (1970-2024).
+        required: true
+        description: O ano para filtrar os dados (1970-2024). Campo obrigatório.
       - name: sub_option
         in: query
         type: string

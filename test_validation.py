@@ -38,7 +38,7 @@ def test_parameter_validation():
         ('1969', False, 'Ano abaixo do mínimo'),
         ('2025', False, 'Ano acima do máximo'),
         ('abc', False, 'Ano não numérico'),
-        ('', True, 'Ano vazio (opcional)')
+        ('', False, 'Ano vazio (agora obrigatório)')
     ]
     
     for year, should_pass, description in test_years:
@@ -79,7 +79,7 @@ def test_parameter_validation():
                 response = requests.get(
                     f"{base_url}/{endpoint}", 
                     auth=auth, 
-                    params={'sub_option': valid_option}, 
+                    params={'year': '2023', 'sub_option': valid_option}, 
                     timeout=15
                 )
                 
@@ -97,7 +97,7 @@ def test_parameter_validation():
             response = requests.get(
                 f"{base_url}/{endpoint}", 
                 auth=auth, 
-                params={'sub_option': invalid_option}, 
+                params={'year': '2023', 'sub_option': invalid_option}, 
                 timeout=10
             )
             
@@ -120,7 +120,7 @@ def test_parameter_validation():
         ({'year': '1969', 'sub_option': 'VINHO DE MESA'}, 'producao', False, 'Ano inválido, sub-opção válida'),
         ({'year': '2023', 'sub_option': 'OPCAO_INEXISTENTE'}, 'producao', False, 'Ano válido, sub-opção inválida'),
         ({'year': '1969', 'sub_option': 'OPCAO_INEXISTENTE'}, 'producao', False, 'Ambos inválidos'),
-        ({}, 'producao', True, 'Sem parâmetros (válido)')
+        ({}, 'producao', False, 'Sem parâmetros (ano agora obrigatório)')
     ]
     
     for params, endpoint, should_pass, description in test_combinations:
@@ -207,6 +207,30 @@ def test_parameter_validation():
     except Exception as e:
         print(f"❌ Erro no teste de performance: {str(e)}")
     
+    # Teste 6: Verificar que ano é obrigatório para todos os endpoints
+    print("\n📋 Teste 6: Verificação de Campo Ano Obrigatório")
+    print("-" * 40)
+    
+    endpoints = ['producao', 'processamento', 'comercializacao', 'importacao', 'exportacao']
+    
+    for endpoint in endpoints:
+        try:
+            # Testar sem parâmetro year
+            response = requests.get(f"{base_url}/{endpoint}", auth=auth, timeout=10)
+            
+            if response.status_code == 400:
+                error_data = response.json()
+                if 'obrigatório' in error_data.get('error', '').lower():
+                    print(f"✅ /{endpoint}: Campo ano verificado como obrigatório")
+                    print(f"   Erro: {error_data.get('error', 'N/A')}")
+                else:
+                    print(f"❌ /{endpoint}: Erro 400 mas não por ano obrigatório")
+            else:
+                print(f"❌ /{endpoint}: Esperado 400 por ano obrigatório, recebido {response.status_code}")
+                
+        except Exception as e:
+            print(f"❌ /{endpoint}: ERRO - {str(e)}")
+    
     print("\n" + "=" * 60)
     print("🏁 Teste de Validação Concluído!")
     print("\n📊 Resumo dos Testes:")
@@ -215,6 +239,7 @@ def test_parameter_validation():
     print("   ✅ Combinações de parâmetros")
     print("   ✅ Estrutura de resposta de erro")
     print("   ✅ Performance com validação")
+    print("   ✅ Verificação de campo ano obrigatório")
     print("\n💡 Próximos passos:")
     print("   - Execute os outros testes: python test_api.py")
     print("   - Verifique a documentação Swagger: http://localhost:5000/apidocs/")

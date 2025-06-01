@@ -37,7 +37,7 @@ def test_api():
             print(f"⚠️ Validação de ano pode ter problema (Status: {response.status_code})")
             
         # Testar sub-opção inválida
-        response = requests.get(f"{base_url}/producao", auth=auth, params={'sub_option': 'OPCAO_INEXISTENTE'}, timeout=10)
+        response = requests.get(f"{base_url}/producao", auth=auth, params={'year': '2023', 'sub_option': 'OPCAO_INEXISTENTE'}, timeout=10)
         if response.status_code == 400:
             print("✅ Validação de sub-opção funcionando (opção inválida rejeitada)")
         else:
@@ -56,6 +56,7 @@ def test_api():
             response = requests.get(
                 f"{base_url}{endpoint}",
                 auth=auth,
+                params={'year': '2023'},
                 timeout=30
             )
             

@@ -118,7 +118,7 @@ def validate_authentication():
     
     # Test with valid credentials
     try:
-        response = requests.get(f"{BASE_URL}/producao", auth=AUTH, timeout=TIMEOUT)
+        response = requests.get(f"{BASE_URL}/producao", auth=AUTH, params={'year': '2023'}, timeout=TIMEOUT)
         if response.status_code in [200, 503]:  # 503 is OK if all cache layers fail
             print_success("Valid credentials accepted")
             return True
@@ -137,10 +137,11 @@ def validate_parameter_validation():
         {"year": "1969", "expected": 400, "description": "Invalid year (too low)"},
         {"year": "2025", "expected": 400, "description": "Invalid year (too high)"},
         {"year": "abc", "expected": 400, "description": "Non-numeric year"},
-        {"sub_option": "INVALID_OPTION", "expected": 400, "description": "Invalid sub-option"},
+        {"year": "2023", "sub_option": "INVALID_OPTION", "expected": 400, "description": "Invalid sub-option"},
         {"year": "2023", "expected": [200, 503], "description": "Valid year"},
         {"year": "1970", "expected": [200, 503], "description": "Valid year (boundary)"},
         {"year": "2024", "expected": [200, 503], "description": "Valid year (boundary)"},
+        {"expected": 400, "description": "Missing year parameter (now required)"},
     ]
     
     all_passed = True
@@ -188,7 +189,7 @@ def validate_endpoints():
     
     for endpoint in endpoints:
         try:
-            response = requests.get(f"{BASE_URL}/{endpoint}", auth=AUTH, timeout=TIMEOUT)
+            response = requests.get(f"{BASE_URL}/{endpoint}", auth=AUTH, params={'year': '2023'}, timeout=TIMEOUT)
             
             if response.status_code == 200:
                 data = response.json()

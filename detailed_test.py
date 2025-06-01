@@ -22,7 +22,7 @@ def detailed_test():
     print("-" * 40)
     
     try:
-        response = requests.get(f"{base_url}/producao", auth=auth, timeout=30)
+        response = requests.get(f"{base_url}/producao", auth=auth, params={'year': '2023'}, timeout=30)
         
         if response.status_code == 200:
             data = response.json()
@@ -95,16 +95,16 @@ def detailed_test():
     
     try:
         # Teste sem autenticação
-        response = requests.get(f"{base_url}/producao", timeout=10)
+        response = requests.get(f"{base_url}/producao", params={'year': '2023'}, timeout=10)
         print(f"Sem auth: Status {response.status_code} (esperado: 401)")
         
         # Teste com credenciais inválidas
         wrong_auth = HTTPBasicAuth('wrong', 'credentials')
-        response = requests.get(f"{base_url}/producao", auth=wrong_auth, timeout=10)
+        response = requests.get(f"{base_url}/producao", auth=wrong_auth, params={'year': '2023'}, timeout=10)
         print(f"Auth inválida: Status {response.status_code} (esperado: 401)")
         
         # Teste com credenciais válidas
-        response = requests.get(f"{base_url}/producao", auth=auth, timeout=10)
+        response = requests.get(f"{base_url}/producao", auth=auth, params={'year': '2023'}, timeout=10)
         print(f"Auth válida: Status {response.status_code} (esperado: 200)")
         
     except Exception as e:
@@ -118,7 +118,7 @@ def detailed_test():
     
     for endpoint in endpoints:
         try:
-            response = requests.get(f"{base_url}{endpoint}", auth=auth, timeout=15)
+            response = requests.get(f"{base_url}{endpoint}", auth=auth, params={'year': '2023'}, timeout=15)
             status_icon = "✅" if response.status_code == 200 else "❌"
             print(f"{status_icon} {endpoint}: {response.status_code}")
             

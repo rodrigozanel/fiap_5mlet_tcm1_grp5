@@ -157,13 +157,13 @@ python create_eb_package.py
 
 ### Endpoints de Dados
 
-| Endpoint | Descrição | Parâmetros Opcionais | Autenticação |
-|----------|-----------|---------------------|---------------|
-| `/producao` | Dados de produção | `year`, `sub_option` | ✅ Requerida |
-| `/processamento` | Dados de processamento | `year`, `sub_option` | ✅ Requerida |
-| `/comercializacao` | Dados de comercialização | `year`, `sub_option` | ✅ Requerida |
-| `/importacao` | Dados de importação | `year`, `sub_option` | ✅ Requerida |
-| `/exportacao` | Dados de exportação | `year`, `sub_option` | ✅ Requerida |
+| Endpoint | Descrição | Parâmetros | Autenticação |
+|----------|-----------|------------|---------------|
+| `/producao` | Dados de produção | `year` (obrigatório), `sub_option` (opcional) | ✅ Requerida |
+| `/processamento` | Dados de processamento | `year` (obrigatório), `sub_option` (opcional) | ✅ Requerida |
+| `/comercializacao` | Dados de comercialização | `year` (obrigatório), `sub_option` (opcional) | ✅ Requerida |
+| `/importacao` | Dados de importação | `year` (obrigatório), `sub_option` (opcional) | ✅ Requerida |
+| `/exportacao` | Dados de exportação | `year` (obrigatório), `sub_option` (opcional) | ✅ Requerida |
 
 ### Endpoints de Monitoramento
 
@@ -184,6 +184,7 @@ Acesse: `http://localhost:5000/apidocs/`
 ### Parâmetro `year`
 - **Tipo**: Integer
 - **Range válido**: 1970-2024
+- **Obrigatório**: ✅ Sim (campo obrigatório em todos os endpoints)
 - **Descrição**: Ano para filtrar os dados (válido para todas as APIs)
 - **Exemplo**: `?year=2023`
 
@@ -227,22 +228,24 @@ Acesse: `http://localhost:5000/apidocs/`
 
 ### Validação de Parâmetros
 - Parâmetros inválidos retornam erro **HTTP 400** com mensagem explicativa
-- Ambos os parâmetros são **opcionais**
+- O parâmetro **`year` é obrigatório** para todos os endpoints
+- O parâmetro **`sub_option` é opcional**
 - Podem ser usados individualmente ou em combinação
+- **Novo**: Requisições sem o parâmetro `year` retornam erro 400
 
 ## Exemplos de Uso
 
 ### 1. Usando curl
 
 ```bash
-# Dados de produção (sem filtros)
-curl -u user1:password1 "http://localhost:5000/producao"
-
-# Dados de produção filtrados por ano
+# Dados de produção (ano obrigatório)
 curl -u user1:password1 "http://localhost:5000/producao?year=2023"
 
+# Dados de produção filtrados por ano específico
+curl -u user1:password1 "http://localhost:5000/producao?year=2022"
+
 # Dados de produção com sub-opção específica
-curl -u user1:password1 "http://localhost:5000/producao?sub_option=VINHO%20DE%20MESA"
+curl -u user1:password1 "http://localhost:5000/producao?year=2023&sub_option=VINHO%20DE%20MESA"
 
 # Dados de produção com ambos os filtros
 curl -u user1:password1 "http://localhost:5000/producao?year=2023&sub_option=SUCO%20DE%20UVA"
@@ -256,8 +259,11 @@ curl -u user1:password1 "http://localhost:5000/exportacao?year=2023&sub_option=v
 # Exemplo de erro - ano inválido (retorna HTTP 400)
 curl -u user1:password1 "http://localhost:5000/producao?year=1969"
 
+# Exemplo de erro - ano ausente (retorna HTTP 400)
+curl -u user1:password1 "http://localhost:5000/producao"
+
 # Exemplo de erro - sub-opção inválida (retorna HTTP 400)
-curl -u user1:password1 "http://localhost:5000/producao?sub_option=OPCAO_INEXISTENTE"
+curl -u user1:password1 "http://localhost:5000/producao?year=2023&sub_option=OPCAO_INEXISTENTE"
 
 # Health check da API (sem autenticação)
 curl "http://localhost:5000/heartbeat"
@@ -272,10 +278,11 @@ from requests.auth import HTTPBasicAuth
 # Configurar autenticação
 auth = HTTPBasicAuth('user1', 'password1')
 
-# Exemplo 1: Requisição básica sem filtros
+# Exemplo 1: Requisição básica com ano obrigatório
 response = requests.get(
     'http://localhost:5000/producao',
-    auth=auth
+    auth=auth,
+    params={'year': '2023'}
 )
 
 if response.status_code == 200:
@@ -300,7 +307,7 @@ if response.status_code == 200:
 else:
     print(f"Erro: {response.status_code}")
 
-# Exemplo 3: Tratamento de erro de validação
+# Exemplo 3: Tratamento de erro de validação (ano inválido)
 response = requests.get(
     'http://localhost:5000/producao',
     auth=auth,
@@ -310,6 +317,20 @@ response = requests.get(
 if response.status_code == 400:
     error_data = response.json()
     print(f"Erro de validação: {error_data['error']}")
+elif response.status_code == 200:
+    data = response.json()
+    print("Dados:", data)
+
+# Exemplo 3b: Tratamento de erro - ano ausente (novo comportamento)
+response = requests.get(
+    'http://localhost:5000/producao',
+    auth=auth
+    # Sem parâmetros - retorna erro 400
+)
+
+if response.status_code == 400:
+    error_data = response.json()
+    print(f"Erro - ano obrigatório: {error_data['error']}")
 elif response.status_code == 200:
     data = response.json()
     print("Dados:", data)
@@ -986,3 +1007,44 @@ python detailed_test.py
 - Alguns endpoints podem não ter dados para determinados anos ou sub-opções
 - **Validação rigorosa**: Parâmetros inválidos retornam erro HTTP 400
 - **Cache inteligente**: Dados são armazenados em cache para melhor performance 
+
+---
+
+## 📋 Changelog
+
+### v1.0.1 - (Junho 2025) - BREAKING CHANGE
+**⚠️ Alteração Importante**: O parâmetro `year` agora é **obrigatório** para todos os endpoints de dados.
+
+#### ✨ Alterações
+- **🔒 BREAKING**: Parâmetro `year` agora é obrigatório em todos os endpoints (`/producao`, `/processamento`, `/comercializacao`, `/importacao`, `/exportacao`)
+- **📝 Documentação**: Swagger atualizado para refletir que `year` é obrigatório (`required: true`)
+- **🧪 Testes**: Todos os testes atualizados para incluir o parâmetro `year`
+- **✅ Validação**: Requisições sem `year` agora retornam erro 400 com mensagem explicativa
+
+#### 🚨 Migração Necessária
+Se você estava usando a API sem o parâmetro `year`, **atualize suas chamadas**:
+
+**❌ Antes (não funciona mais):**
+```bash
+curl -u user1:password1 "http://localhost:5000/producao"
+```
+
+**✅ Agora (obrigatório):**
+```bash
+curl -u user1:password1 "http://localhost:5000/producao?year=2023"
+```
+
+#### 📱 Resposta de Erro
+```json
+{
+  "error": "Parâmetro 'year' é obrigatório."
+}
+```
+
+#### 🎯 Motivo da Mudança
+- Melhora a qualidade dos dados retornados
+- Evita consultas excessivamente amplas
+- Força especificação explícita do período de interesse
+- Alinha com boas práticas de API design
+
+--- 

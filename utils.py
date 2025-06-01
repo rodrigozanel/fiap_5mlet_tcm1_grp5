@@ -23,27 +23,30 @@ VALID_SUB_OPTIONS = {
 }
 
 baseURL = "http://vitibrasil.cnpuv.embrapa.br/index.php"
+#baseURL = "http://invalid-url-to-force-csv-fallback.com/index.php"  # Temporary for testing
 
 def validate_parameters(year=None, sub_option=None, endpoint=None):
     """
     Validate year and sub_option parameters.
     
     Args:
-        year (str): Year parameter to validate
+        year (str): Year parameter to validate (REQUIRED)
         sub_option (str): Sub-option parameter to validate
         endpoint (str): Endpoint name for sub_option validation
         
     Returns:
         tuple: (is_valid, error_message)
     """
-    # Validate year
-    if year is not None:
-        try:
-            year_int = int(year)
-            if year_int not in VALID_YEARS:
-                return False, f"Ano inválido. Deve estar entre {min(VALID_YEARS)} e {max(VALID_YEARS)}."
-        except ValueError:
-            return False, "Ano deve ser um número inteiro válido."
+    # Validate year - NOW REQUIRED
+    if year is None or year == '':
+        return False, "Parâmetro 'year' é obrigatório."
+    
+    try:
+        year_int = int(year)
+        if year_int not in VALID_YEARS:
+            return False, f"Ano inválido. Deve estar entre {min(VALID_YEARS)} e {max(VALID_YEARS)}."
+    except ValueError:
+        return False, "Ano deve ser um número inteiro válido."
     
     # Validate sub_option
     if sub_option is not None and endpoint is not None:
