@@ -1,0 +1,229 @@
+# Product Requirements Document (PRD)
+# Implementação da Terceira Camada de Fallback - CSV Local
+
+## 1. Visão Geral do Produto
+**Nome do Produto:** Terceira Camada de Fallback com CSV Local
+**Versão:** 1.0
+**Data:** 2025-05-31
+
+### Contexto
+A API Flask de Web Scraping da Embrapa atualmente possui um sistema de cache de duas camadas:
+1. Cache Redis de curto prazo (5 minutos)
+2. Cache Redis de fallback (30 dias)
+
+É necessário implementar uma terceira camada usando arquivos CSV locais para garantir disponibilidade mesmo quando o Redis falha completamente.
+
+### Problema a Resolver
+Quando tanto o web scraping quanto o cache Redis falham, a API retorna erro 500, deixando usuários sem acesso aos dados. É necessário uma camada final de fallback usando dados locais.
+
+## 2. Objetivos e Metas
+
+### Objetivo Principal
+Implementar um sistema de fallback local usando arquivos CSV que garanta disponibilidade de dados mesmo em falhas completas de Redis e web scraping.
+
+### Objetivos Específicos
+- Adicionar parsing de arquivos CSV locais no cache manager
+- Mapear endpoints para arquivos CSV correspondentes
+- Integrar CSV fallback no fluxo de cache existente
+- Manter compatibilidade com API atual
+- Adicionar logging apropriado
+- Atualizar testes para nova funcionalidade
+
+### Métricas de Sucesso
+- 100% de disponibilidade da API mesmo com Redis e web scraping indisponíveis
+- Tempo de resposta < 500ms para dados do CSV fallback
+- Cobertura de testes > 95%
+- Zero breaking changes na API existente
+
+## 3. Funcionalidades Principais
+
+### 3.1 CSV Parser Module
+**Descrição:** Módulo para ler e converter arquivos CSV em formato compatível com a API
+**Prioridade:** Alta
+**Entregáveis:**
+- Classe CsvFallbackManager
+- Método parse_csv_file()
+- Método convert_to_api_format()
+- Tratamento de erros de arquivo
+
+### 3.2 Endpoint-to-CSV Mapping
+**Descrição:** Sistema de mapeamento entre endpoints da API e arquivos CSV correspondentes
+**Prioridade:** Alta
+**Entregáveis:**
+- Dicionário de mapeamento endpoint → arquivo CSV
+- Método get_csv_file_for_endpoint()
+- Validação de arquivos existentes
+
+### 3.3 Cache Manager Integration
+**Descrição:** Integração da terceira camada no CacheManager existente
+**Prioridade:** Alta
+**Entregáveis:**
+- Método get_csv_fallback()
+- Atualização do fluxo de cache
+- Logging de fallback CSV
+- Indicador cached: "csv_fallback"
+
+### 3.4 Error Handling & Logging
+**Descrição:** Sistema robusto de tratamento de erros e logging
+**Prioridade:** Média
+**Entregáveis:**
+- Logs específicos para CSV fallback
+- Tratamento de arquivos corrompidos
+- Fallback gracioso para erro 500
+
+### 3.5 Testing & Validation
+**Descrição:** Testes abrangentes para nova funcionalidade
+**Prioridade:** Alta
+**Entregáveis:**
+- Testes unitários para CSV parser
+- Testes de integração com cache
+- Testes de fallback scenarios
+- Validação de performance
+
+## 4. Especificações Técnicas
+
+### 4.1 Estrutura de Arquivos
+```
+cache/
+├── __init__.py
+├── cache_manager.py (modificado)
+├── redis_client.py
+└── csv_fallback.py (novo)
+
+data/fallback/
+├── Producao.csv
+├── ProcessaViniferas.csv
+├── Comercio.csv
+└── ... (outros CSVs)
+```
+
+### 4.2 Fluxo de Cache Atualizado
+```
+Requisição → Cache Curto Prazo → Web Scraping → Cache Fallback → CSV Local → Erro 500
+```
+
+### 4.3 Mapeamento Endpoint-CSV
+```python
+ENDPOINT_CSV_MAP = {
+    'producao': 'Producao.csv',
+    'processamento': {
+        'viniferas': 'ProcessaViniferas.csv',
+        'americanas': 'ProcessaAmericanas.csv',
+        'mesa': 'ProcessaMesa.csv',
+        'semclass': 'ProcessaSemclass.csv'
+    },
+    'comercializacao': 'Comercio.csv',
+    'importacao': {
+        'vinhos': 'ImpVinhos.csv',
+        'espumantes': 'ImpEspumantes.csv',
+        'frescas': 'ImpFrescas.csv',
+        'passas': 'ImpPassas.csv',
+        'suco': 'ImpSuco.csv'
+    },
+    'exportacao': {
+        'vinho': 'ExpVinho.csv',
+        'uva': 'ExpUva.csv',
+        'espumantes': 'ExpEspumantes.csv',
+        'suco': 'ExpSuco.csv'
+    }
+}
+```
+
+### 4.4 Formato de Resposta
+Manter compatibilidade total com formato atual, apenas adicionando:
+```json
+{
+  "data": { ... },
+  "cached": "csv_fallback"
+}
+```
+
+## 5. Requisitos Não-Funcionais
+
+### 5.1 Performance
+- Tempo de resposta CSV fallback < 500ms
+- Parsing eficiente de arquivos CSV
+- Cache em memória para CSVs frequentemente acessados
+
+### 5.2 Disponibilidade
+- 100% de uptime mesmo com falhas de Redis
+- Degradação graceful de funcionalidades
+
+### 5.3 Manutenibilidade
+- Código bem documentado
+- Testes abrangentes
+- Logging detalhado
+
+### 5.4 Compatibilidade
+- Zero breaking changes
+- Manter interface API atual
+- Funcionar com versões existentes do Redis
+
+## 6. Dependências e Restrições
+
+### Dependências
+- Arquivos CSV existentes em data/fallback/
+- Estrutura atual do CacheManager
+- Flask framework atual
+- Sistema de logging existente
+
+### Restrições
+- Não modificar estrutura da API
+- Manter compatibilidade com testes existentes
+- Não introduzir novas dependências externas
+- Arquivos CSV são read-only
+
+## 7. Cronograma de Entrega
+
+### Fase 1: Desenvolvimento Core (2-3 horas)
+- Implementar CsvFallbackManager
+- Criar sistema de mapeamento
+- Integrar com CacheManager
+
+### Fase 2: Testes e Validação (1-2 horas)
+- Criar testes unitários
+- Testar cenários de fallback
+- Validar performance
+
+### Fase 3: Documentação e Deploy (30-60 min)
+- Atualizar README
+- Atualizar documentação Swagger
+- Commit e deploy
+
+## 8. Critérios de Aceitação
+
+### Must Have
+- ✅ CSV fallback funciona quando Redis falha
+- ✅ Todos os endpoints suportam CSV fallback
+- ✅ Formato de resposta mantém compatibilidade
+- ✅ Testes passam 100%
+- ✅ Logging apropriado implementado
+
+### Should Have
+- ✅ Performance otimizada
+- ✅ Documentação completa
+- ✅ Error handling robusto
+
+### Could Have
+- Cache em memória para CSVs
+- Compressão de dados CSV
+- Métricas de uso de fallback
+
+## 9. Riscos e Mitigações
+
+### Riscos Identificados
+1. **Arquivos CSV corrompidos** → Validação de integridade
+2. **Performance lenta** → Cache em memória
+3. **Inconsistência de dados** → Documentação clara sobre limitações
+4. **Breaking changes** → Testes rigorosos
+
+## 10. Definição de Pronto (Definition of Done)
+
+Uma tarefa está pronta quando:
+- [ ] Código implementado e funcional
+- [ ] Testes unitários criados e passando
+- [ ] Testes de integração validados
+- [ ] Documentação atualizada
+- [ ] Code review aprovado
+- [ ] Deploy realizado com sucesso
+- [ ] Validação em ambiente de produção 

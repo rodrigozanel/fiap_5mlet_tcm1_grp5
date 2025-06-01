@@ -225,7 +225,11 @@ def parse_html_content(html_content, logger):
 
 def get_content_with_cache(endpoint_name, url, cache_manager, logger, params=None):
     """
-    Fetch content with two-layer caching strategy.
+    Fetch content with comprehensive three-layer caching strategy and robust error handling.
+    
+    Layer 1: Short-term Redis cache (5 minutes)
+    Layer 2: Fallback Redis cache (30 days) 
+    Layer 3: CSV fallback (local files)
     
     Args:
         endpoint_name (str): Name of the endpoint for cache key generation
@@ -236,44 +240,113 @@ def get_content_with_cache(endpoint_name, url, cache_manager, logger, params=Non
         
     Returns:
         tuple: (content, cached_flag) where cached_flag indicates cache source
+               Returns (None, False) only if all three layers fail
     """
+    error_context = {
+        'endpoint': endpoint_name,
+        'url': url,
+        'params': params or {}
+    }
+    
     try:
-        # Try short-term cache first
+        # Layer 1: Try short-term cache first
+        logger.debug(f"Attempting Layer 1 (short-term cache) for {endpoint_name}")
         cached_response = cache_manager.get_short_cache(endpoint_name, params)
         if cached_response:
-            logger.info(f"Returning data from short-term cache for {endpoint_name}")
+            logger.info(f"✅ Layer 1 HIT: Returning short-term cache data for {endpoint_name}")
             return cached_response['data'], cached_response['cached']
         
-        # Try to fetch fresh data
-        logger.info(f"Fetching fresh data from {url}")
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
+        logger.debug(f"Layer 1 MISS: No short-term cache for {endpoint_name}")
         
-        # Parse the content to get structured data
-        parsed_data = parse_html_content(response.text, logger)
+        # Layer 2: Try to fetch fresh data via web scraping
+        logger.info(f"Attempting fresh data fetch from {url}")
+        try:
+            response = requests.get(url, timeout=30)
+            response.raise_for_status()
+            
+            # Parse the content to get structured data
+            parsed_data = parse_html_content(response.text, logger)
+            
+            # Validate parsed data
+            if not parsed_data or not parsed_data.get('data'):
+                raise ValueError("Parsed data is empty or invalid")
+            
+            # Store in both Redis caches for future use
+            try:
+                cache_manager.set_short_cache(endpoint_name, parsed_data, params)
+                cache_manager.set_fallback_cache(endpoint_name, parsed_data, params)
+                logger.info(f"✅ Fresh data fetched and cached for {endpoint_name}")
+            except Exception as cache_error:
+                logger.warning(f"⚠️ Failed to cache fresh data for {endpoint_name}: {cache_error}")
+                # Continue without caching, we still have the data
+            
+            return parsed_data, False
+            
+        except requests.exceptions.Timeout as e:
+            logger.error(f"❌ Web scraping TIMEOUT for {endpoint_name}: {e}")
+            error_context['scraping_error'] = f"Timeout: {str(e)}"
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"❌ Web scraping CONNECTION ERROR for {endpoint_name}: {e}")
+            error_context['scraping_error'] = f"Connection error: {str(e)}"
+        except requests.exceptions.HTTPError as e:
+            logger.error(f"❌ Web scraping HTTP ERROR for {endpoint_name}: {e}")
+            error_context['scraping_error'] = f"HTTP error: {str(e)}"
+        except requests.RequestException as e:
+            logger.error(f"❌ Web scraping REQUEST ERROR for {endpoint_name}: {e}")
+            error_context['scraping_error'] = f"Request error: {str(e)}"
+        except ValueError as e:
+            logger.error(f"❌ Web scraping PARSING ERROR for {endpoint_name}: {e}")
+            error_context['scraping_error'] = f"Parsing error: {str(e)}"
+        except Exception as e:
+            logger.error(f"❌ Web scraping UNEXPECTED ERROR for {endpoint_name}: {e}")
+            error_context['scraping_error'] = f"Unexpected error: {str(e)}"
         
-        # Store in both caches
-        cache_manager.set_short_cache(endpoint_name, parsed_data, params)
-        cache_manager.set_fallback_cache(endpoint_name, parsed_data, params)
+        # Layer 2: Try fallback Redis cache when web scraping fails
+        logger.debug(f"Attempting Layer 2 (fallback cache) for {endpoint_name}")
+        try:
+            cached_response = cache_manager.get_fallback_cache(endpoint_name, params)
+            if cached_response:
+                logger.warning(f"⚠️ Layer 2 HIT: Returning fallback cache data for {endpoint_name} due to scraping failure")
+                return cached_response['data'], cached_response['cached']
+            
+            logger.debug(f"Layer 2 MISS: No fallback cache for {endpoint_name}")
+        except Exception as fallback_error:
+            logger.error(f"❌ Layer 2 ERROR: Fallback cache failed for {endpoint_name}: {fallback_error}")
+            error_context['fallback_cache_error'] = str(fallback_error)
         
-        logger.info(f"Fresh data fetched and cached for {endpoint_name}")
-        return parsed_data, False
+        # Layer 3: Try CSV fallback when both Redis caches fail
+        logger.debug(f"Attempting Layer 3 (CSV fallback) for {endpoint_name}")
+        try:
+            csv_response = cache_manager.get_csv_fallback(endpoint_name, params)
+            if csv_response:
+                logger.warning(f"⚠️ Layer 3 HIT: Returning CSV fallback data for {endpoint_name} due to Redis failure")
+                return csv_response, csv_response['cached']
+            
+            logger.debug(f"Layer 3 MISS: No CSV fallback data for {endpoint_name}")
+            error_context['csv_fallback_status'] = 'No data available'
+        except Exception as csv_error:
+            logger.error(f"❌ Layer 3 ERROR: CSV fallback failed for {endpoint_name}: {csv_error}")
+            error_context['csv_fallback_error'] = str(csv_error)
         
-    except requests.RequestException as e:
-        logger.error(f"Error fetching content from {url}: {e}")
-        
-        # Try fallback cache when web scraping fails
-        cached_response = cache_manager.get_fallback_cache(endpoint_name, params)
-        if cached_response:
-            logger.warning(f"Returning fallback cache data for {endpoint_name} due to scraping failure")
-            return cached_response['data'], cached_response['cached']
-        
-        # No cache available, return error
-        logger.error(f"No cached data available for {endpoint_name}")
+        # All three layers failed
+        logger.critical(f"💥 ALL LAYERS FAILED for {endpoint_name}: {error_context}")
         return None, False
-    
+        
     except Exception as e:
-        logger.error(f"Unexpected error in get_content_with_cache: {e}")
+        logger.critical(f"💥 CRITICAL ERROR in get_content_with_cache for {endpoint_name}: {e}", exc_info=True)
+        error_context['critical_error'] = str(e)
+        
+        # Emergency fallback: try CSV one more time with minimal error handling
+        try:
+            logger.info(f"🚨 EMERGENCY: Attempting CSV fallback for {endpoint_name}")
+            csv_response = cache_manager.get_csv_fallback(endpoint_name, params)
+            if csv_response:
+                logger.warning(f"🚨 EMERGENCY SUCCESS: CSV fallback worked for {endpoint_name}")
+                return csv_response, csv_response['cached']
+        except Exception as emergency_error:
+            logger.critical(f"💥 EMERGENCY FALLBACK FAILED for {endpoint_name}: {emergency_error}")
+            error_context['emergency_fallback_error'] = str(emergency_error)
+        
         return None, False
 
 def get_content(url, logger):

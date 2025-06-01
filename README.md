@@ -10,7 +10,8 @@ Esta é uma API Flask que realiza web scraping do site da Embrapa para extrair d
 - **Parsing inteligente de tabelas**: Extração estruturada de dados HTML
 - **Documentação Swagger**: Interface interativa para testar a API
 - **Tratamento de erros**: Logging detalhado e respostas estruturadas
-- **Dados de fallback**: Arquivos CSV locais como fonte alternativa de dados
+- **Sistema de cache três camadas**: Cache Redis (curto/longo prazo) + fallback CSV local
+- **Alta disponibilidade**: Garante resposta mesmo quando web scraping e Redis falham
 
 ## Configuração do Ambiente
 
@@ -404,161 +405,226 @@ test_cache_performance()
 - **flasgger**: Documentação Swagger automática
 - **Redis**: Sistema de cache em memória
 
-## Sistema de Cache Inteligente
+## 🗄️ Sistema de Cache Três Camadas
 
-A aplicação implementa um **sistema de cache de duas camadas** usando Redis para otimizar performance e garantir disponibilidade dos dados mesmo quando o site da Embrapa está indisponível.
+A API implementa um **sistema de cache robusto de três camadas** que garante alta disponibilidade e performance mesmo em cenários de falha:
 
-### Arquitetura do Cache
+### Camadas do Sistema
 
-#### 🚀 Cache de Curto Prazo (Short-term Cache)
-- **Finalidade**: Acelerar requisições frequentes
-- **TTL padrão**: 5 minutos (300 segundos)
-- **Prefixo**: `short:`
-- **Uso**: Dados recentes para evitar web scraping desnecessário
+#### 🚀 **Camada 1: Cache Curto Prazo (Redis)**
+- **TTL**: 5 minutos (configurável via `SHORT_CACHE_TTL`)
+- **Propósito**: Respostas rápidas para requisições frequentes
+- **Comportamento**: Dados frescos para uso imediato
 
-#### 🛡️ Cache de Fallback (Fallback Cache)
-- **Finalidade**: Garantir disponibilidade quando o site fonte está indisponível
-- **TTL padrão**: 30 dias (2592000 segundos)
-- **Prefixo**: `fallback:`
-- **Uso**: Dados de backup para situações de emergência
+#### 🛡️ **Camada 2: Cache Fallback (Redis)**  
+- **TTL**: 30 dias (configurável via `FALLBACK_CACHE_TTL`)
+- **Propósito**: Backup quando web scraping falha
+- **Comportamento**: Dados históricos para alta disponibilidade
 
-### Fluxo de Funcionamento
+#### 📁 **Camada 3: Fallback CSV (Arquivos Locais)**
+- **TTL**: Arquivos estáticos locais  
+- **Propósito**: Última linha de defesa quando Redis está indisponível
+- **Comportamento**: Dados estruturados em CSV convertidos para formato API
+
+### Fluxo de Execução
 
 ```mermaid
 graph TD
-    A[Requisição do Cliente] --> B{Cache Curto Prazo?}
-    B -->|HIT| C[Retorna dados do cache]
-    B -->|MISS| D[Tenta Web Scraping]
-    D -->|Sucesso| E[Armazena em ambos os caches]
-    D -->|Falha| F{Cache Fallback?}
-    F -->|HIT| G[Retorna dados do fallback]
-    F -->|MISS| H[Erro 500]
-    E --> I[Retorna dados frescos]
+    A[Requisição API] --> B{Cache Curto<br/>5min}
+    B -->|HIT| C[Retorna Dados Cache]
+    B -->|MISS| D[Web Scraping]
+    D -->|Sucesso| E[Salva em Ambos Caches]
+    E --> F[Retorna Dados Frescos]
+    D -->|Falha| G{Cache Fallback<br/>30 dias}
+    G -->|HIT| H[Retorna Dados Cache Antigo]
+    G -->|MISS| I{CSV Fallback<br/>Arquivos Locais}
+    I -->|Encontrado| J[Converte CSV→API]
+    J --> K[Retorna Dados CSV]
+    I -->|Não Encontrado| L[Erro 503 - Indisponível]
 ```
 
-#### Estratégia de Cache por Requisição
+### Mapeamento Endpoint-to-CSV
 
-1. **Primeira tentativa**: Busca no cache de curto prazo
-   - Se encontrado: retorna imediatamente com `"cached": "short_term"`
-   
-2. **Segunda tentativa**: Web scraping do site da Embrapa
-   - Se bem-sucedido: armazena em ambos os caches e retorna com `"cached": false`
-   
-3. **Terceira tentativa**: Busca no cache de fallback
-   - Se encontrado: retorna dados antigos com `"cached": "fallback"`
-   - Se não encontrado: retorna erro 500
+O sistema mapeia automaticamente cada endpoint para arquivos CSV específicos:
 
-### Configuração do Cache
+```python
+ENDPOINT_CSV_MAP = {
+    'producao': {
+        'default': 'Producao.csv',
+        'sub_options': {
+            'VINHO DE MESA': 'Producao.csv',
+            'VINHO FINO DE MESA (VINIFERA)': 'Producao.csv',
+            'SUCO DE UVA': 'Producao.csv',
+            'DERIVADOS': 'Producao.csv'
+        }
+    },
+    'processamento': {
+        'default': 'ProcessaViniferas.csv',
+        'sub_options': {
+            'viniferas': 'ProcessaViniferas.csv',
+            'americanas': 'ProcessaAmericanas.csv',
+            'mesa': 'ProcessaMesa.csv',
+            'semclass': 'ProcessaSemclass.csv'
+        }
+    },
+    'comercializacao': {
+        'default': 'Comercio.csv'
+    },
+    'importacao': {
+        'default': 'ImpVinhos.csv',
+        'sub_options': {
+            'vinhos': 'ImpVinhos.csv',
+            'espumantes': 'ImpEspumantes.csv',
+            'frescas': 'ImpFrescas.csv',
+            'passas': 'ImpPassas.csv',
+            'suco': 'ImpSuco.csv'
+        }
+    },
+    'exportacao': {
+        'default': 'ExpVinho.csv',
+        'sub_options': {
+            'vinho': 'ExpVinho.csv',
+            'uva': 'ExpUva.csv',
+            'espumantes': 'ExpEspumantes.csv',
+            'suco': 'ExpSuco.csv'
+        }
+    }
+}
+```
 
-#### Variáveis de Ambiente
+### Configuração CSV Fallback
+
+#### Estrutura de Diretórios
+```
+data/
+└── fallback/
+    ├── Producao.csv
+    ├── ProcessaViniferas.csv
+    ├── ProcessaAmericanas.csv
+    ├── ProcessaMesa.csv
+    ├── ProcessaSemclass.csv
+    ├── Comercio.csv
+    ├── ImpVinhos.csv
+    ├── ImpEspumantes.csv
+    ├── ImpFrescas.csv
+    ├── ImpPassas.csv
+    ├── ImpSuco.csv
+    ├── ExpVinho.csv
+    ├── ExpUva.csv
+    ├── ExpEspumantes.csv
+    └── ExpSuco.csv
+```
+
+#### Configuração Avançada CSV
 ```bash
-# Cache de curto prazo (em segundos)
-SHORT_CACHE_TTL=300          # 5 minutos (padrão)
-
-# Cache de fallback (em segundos)  
-FALLBACK_CACHE_TTL=2592000     # 30 dias (padrão)
-
-# Configuração Redis (opcional)
-REDIS_HOST=localhost         # Host do Redis
-REDIS_PORT=6379             # Porta do Redis
-REDIS_DB=0                  # Database do Redis
+# Configuração CSV Fallback
+CSV_FALLBACK_DIR=data/fallback    # Default: data/fallback
+CSV_CACHE_ENABLED=true            # Default: true
+CSV_MAX_CACHE_SIZE=50             # Default: 50 files
+CSV_CACHE_TTL=1800                # Default: 1800s (30min)
 ```
 
-#### Configuração Docker
-O Redis é automaticamente configurado via `docker-compose.yml`:
-```yaml
-services:
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    
-  app:
-    environment:
-      - SHORT_CACHE_TTL=300
-      - FALLBACK_CACHE_TTL=2592000
-```
-
-### Chaves de Cache
-
-#### Formato das Chaves
-```
-{prefixo}{endpoint}:{hash_md5}
-```
-
-**Exemplos:**
-- `short:producao:a1b2c3d4e5f6...` - Cache curto para produção
-- `fallback:exportacao:f6e5d4c3b2a1...` - Cache fallback para exportação
-
-#### Geração de Hash
-O hash MD5 é gerado baseado em:
-- Nome do endpoint
-- Parâmetros da requisição (year, sub_option)
-- Ordenação consistente para garantir chaves únicas
-
-### Indicadores de Cache na Resposta
-
-Todas as respostas incluem o campo `cached` indicando a origem dos dados:
-
+#### Formato de Resposta CSV Fallback
 ```json
 {
-  "data": { ... },
-  "cached": false              // Dados frescos do web scraping
+  "data": {
+    "header": [["Produto", "Quantidade (L.)", "Ano"]],
+    "body": [
+      {"item_data": ["VINHO DE MESA", "123456789", "2023"], "sub_items": []},
+      {"item_data": ["VINHO FINO", "987654321", "2023"], "sub_items": []}
+    ],
+    "footer": [["TOTAL GERAL", "1567890233", "2023"]]
+  },
+  "cached": "csv_fallback",
+  "data_source": "Local CSV files (Redis unavailable)",
+  "freshness": "Static data from local files",
+  "endpoint": "producao",
+  "status": "success"
 }
 ```
 
-```json
-{
-  "data": { ... },
-  "cached": "short_term"       // Dados do cache de curto prazo
-}
-```
+### Estados de Cache na Resposta
 
-```json
-{
-  "data": { ... },
-  "cached": "fallback"         // Dados do cache de fallback
-}
-```
+A API retorna um campo `cached` que indica a fonte dos dados:
 
-### Monitoramento do Cache
+| Valor | Descrição | TTL | Performance |
+|-------|-----------|-----|-------------|
+| `false` | Dados frescos via web scraping | N/A | ⚡ Tempo real |
+| `"short_term"` | Cache curto prazo (Redis) | 5min | ⚡ Muito rápida |
+| `"fallback"` | Cache fallback (Redis) | 30d | ⚡ Rápida |
+| `"csv_fallback"` | Fallback CSV (arquivos locais) | Estático | ⚡ Rápida |
 
-#### Via Endpoint Heartbeat
+### Monitoramento e Estatísticas
+
+#### Endpoint de Estatísticas de Cache
 ```bash
-curl http://localhost:5000/heartbeat
-```
+# Via API (requer autenticação)
+GET /cache-stats
 
-**Resposta inclui informações do cache:**
-```json
+# Resposta detalhada
 {
-  "cache": {
-    "redis_status": "connected",
-    "short_cache_ttl": 300,
-    "fallback_cache_ttl": 2592000
+  "timestamp": "2025-01-26T10:30:00.123456+00:00",
+  "redis_available": true,
+  "cache_layers": {
+    "short_term": {
+      "entries": 15,
+      "ttl_seconds": 300,
+      "status": "active"
+    },
+    "fallback": {
+      "entries": 127,
+      "ttl_seconds": 2592000,
+      "status": "active"
+    },
+    "csv_fallback": {
+      "status": "active",
+      "cache_enabled": true,
+      "entries": 12,
+      "max_size": 50,
+      "hit_rate_percent": 85.5,
+      "cache_efficiency": "excellent"
+    }
+  },
+  "csv_fallback_validation": {
+    "overall_status": "healthy",
+    "total_endpoints": 5,
+    "valid_endpoints": 5,
+    "existing_files": 15,
+    "missing_files": 0
+  },
+  "overall_status": {
+    "active_layers": 3,
+    "total_layers": 3,
+    "health": "excellent"
   }
 }
 ```
 
-#### Status do Redis
-- `"connected"`: Redis disponível e funcionando
-- `"disconnected"`: Redis indisponível (cache desabilitado)
+#### Logs Avançados do Sistema
+```python
+# Logs com emojis para identificação visual
+🎯 Cache HIT   - "Layer 1 HIT: Returning short-term cache data"
+❌ Cache MISS  - "Layer 1 MISS: No short-term cache available"
+🌐 Web Scraping - "Fresh data fetched and cached"
+⚠️ Fallback   - "Layer 2 HIT: Using fallback cache due to scraping failure"
+🗂️ CSV Fallback - "Layer 3 HIT: Returning CSV fallback data"
+💥 All Failed  - "ALL LAYERS FAILED: All data sources unavailable"
+```
 
-### Vantagens do Sistema
+### Casos de Uso por Cenário
 
-#### 🚀 Performance
-- **Redução de latência**: Dados em cache retornam instantaneamente
-- **Menos web scraping**: Evita requisições desnecessárias ao site da Embrapa
-- **Otimização de recursos**: Menor uso de CPU e rede
+#### ✅ **Cenário Normal**
+1. **Requisição** → Cache curto (miss) → Web scraping → Dados frescos
+2. **Requisição seguinte** → Cache curto (hit) → Resposta instantânea
 
-#### 🛡️ Disponibilidade
-- **Tolerância a falhas**: Funciona mesmo se o site da Embrapa estiver fora do ar
-- **Dados históricos**: Cache de fallback mantém dados por 30 dias
-- **Graceful degradation**: Degrada graciosamente em caso de problemas
+#### ⚠️ **Site Embrapa Indisponível**
+1. **Requisição** → Cache curto (miss) → Web scraping (falha) → Cache fallback (hit) → Dados antigos
 
-#### 📊 Observabilidade
-- **Logs detalhados**: Registra hits/misses de cache
-- **Métricas de performance**: Tempo de resposta por fonte de dados
-- **Status em tempo real**: Monitoramento via endpoint heartbeat
+#### 🚨 **Redis Indisponível**  
+1. **Requisição** → Redis (falha) → Web scraping (falha) → CSV fallback (hit) → Dados estáticos
+
+#### 💥 **Falha Total**
+1. **Requisição** → Todas as camadas (falha) → Erro 503 com contexto detalhado
 
 ### Gerenciamento do Cache
 
@@ -579,28 +645,54 @@ DEL fallback:*
 FLUSHDB
 ```
 
+#### Validação CSV Fallback
+```bash
+# Via Python REPL (com aplicação rodando)
+from cache import CacheManager
+cache_manager = CacheManager()
+
+# Validar mapeamento de endpoints
+validation = cache_manager.validate_csv_fallback()
+print(validation)
+
+# Testar endpoint específico
+csv_data = cache_manager.get_csv_fallback('producao', {'sub_option': 'VINHO DE MESA'})
+print(csv_data)
+```
+
 #### Configuração de TTL Personalizada
 ```bash
-# Cache mais agressivo (1 minuto)
+# Cache mais agressivo (1 minuto)  
 SHORT_CACHE_TTL=60
 
 # Cache de fallback mais longo (7 dias)
 FALLBACK_CACHE_TTL=604800
+
+# Cache CSV com TTL menor (10 minutos)
+CSV_CACHE_TTL=600
 ```
 
-### Casos de Uso
+### Vantagens do Sistema Três Camadas
 
-#### 🔄 Desenvolvimento
-- Cache curto para testes rápidos
-- Dados sempre atualizados
+#### 🚀 **Performance**
+- **Respostas sub-segundo**: Cache curto para dados recentes
+- **Redução de latência**: Evita web scraping desnecessário  
+- **Otimização de recursos**: Menor uso de CPU e rede
 
-#### 🏭 Produção
-- Cache otimizado para performance
-- Fallback para alta disponibilidade
+#### 🛡️ **Alta Disponibilidade**
+- **Tolerância a falhas múltiplas**: 3 camadas independentes
+- **Zero downtime**: Sempre há uma fonte de dados disponível
+- **Graceful degradation**: Degrada graciosamente mantendo funcionalidade
 
-#### 🚨 Emergência
-- Site da Embrapa indisponível
-- API continua funcionando com dados em cache
+#### 📊 **Observabilidade**
+- **Logs detalhados**: Registra toda a cadeia de fallback
+- **Métricas em tempo real**: Performance por camada
+- **Health checks**: Status completo do sistema de cache
+
+#### 💾 **Flexibilidade**
+- **Configuração por ambiente**: TTLs ajustáveis por cenário
+- **Dados históricos**: Cache fallback mantém dados por semanas
+- **Dados locais**: CSV garante funcionamento offline
 
 ### Detalhes de Implementação Técnica
 
@@ -608,148 +700,91 @@ FALLBACK_CACHE_TTL=604800
 ```
 cache/
 ├── __init__.py          # Exposição das classes principais
-├── cache_manager.py     # Gerenciador principal de cache
-└── redis_client.py      # Cliente Redis com singleton pattern
+├── cache_manager.py     # Gerenciador principal (3 camadas)
+├── redis_client.py      # Cliente Redis com singleton
+└── csv_fallback.py      # Gerenciador CSV fallback
 ```
 
-#### Classe CacheManager
-A classe `CacheManager` implementa toda a lógica de cache com os seguintes métodos principais:
-
+#### Classe CacheManager (Atualizada)
 ```python
-# Métodos de cache de curto prazo
-get_short_cache(endpoint, params)    # Busca dados no cache de 5min
-set_short_cache(endpoint, data, params)  # Armazena no cache de 5min
+# Métodos de cache Redis
+get_short_cache(endpoint, params)        # Camada 1: Cache 5min
+set_short_cache(endpoint, data, params)  # Armazena cache 5min
+get_fallback_cache(endpoint, params)     # Camada 2: Cache 30d  
+set_fallback_cache(endpoint, data, params) # Armazena cache 30d
 
-# Métodos de cache de fallback  
-get_fallback_cache(endpoint, params)     # Busca dados no cache de 30d
-set_fallback_cache(endpoint, data, params)   # Armazena no cache de 30d
+# Métodos de CSV fallback
+get_csv_fallback(endpoint, params)       # Camada 3: CSV local
+validate_csv_fallback()                  # Valida arquivos CSV
+get_csv_fallback_stats()                 # Estatísticas CSV
 
 # Utilitários
-clear_cache(endpoint, cache_type)    # Limpa cache específico
-get_cache_stats()                    # Estatísticas do cache
+clear_cache(endpoint, cache_type)        # Limpa cache específico
+get_cache_stats()                        # Estatísticas completas (3 camadas)
 ```
 
-#### Geração de Chaves Únicas
+#### Integração com Endpoints (Atualizada)
 ```python
-# Algoritmo de geração de chave cache
-def _generate_cache_key(prefix, endpoint, params):
-    key_data = {
-        'endpoint': endpoint,
-        'params': params or {}
-    }
-    key_string = json.dumps(key_data, sort_keys=True)
-    key_hash = hashlib.md5(key_string.encode()).hexdigest()
-    return f"{prefix}{endpoint}:{key_hash}"
-
-# Exemplos de chaves geradas:
-# short:producao:a1b2c3d4e5f6789...
-# fallback:exportacao:9f8e7d6c5b4a321...
-```
-
-#### Serialização de Dados
-Todos os dados são serializados em JSON com metadados:
-```json
-{
-  "data": { /* dados originais */ },
-  "timestamp": "2025-01-26T10:30:00.123456+00:00",
-  "cached": true
-}
-```
-
-#### Tratamento de Conexão Redis
-- **Singleton Pattern**: Uma única instância Redis por aplicação
-- **Connection Pooling**: Reutilização de conexões
-- **Timeout Configuration**: 5s para conexão e operações
-- **Health Checks**: Verificação automática de disponibilidade
-- **Graceful Fallback**: Aplicação funciona sem Redis
-
-#### Configurações Redis Avançadas
-```python
-redis.Redis(
-    host=redis_host,
-    port=redis_port,
-    db=redis_db,
-    password=redis_password,
-    decode_responses=True,        # Decodifica strings automaticamente
-    socket_connect_timeout=5,     # Timeout de conexão
-    socket_timeout=5,             # Timeout de operação
-    retry_on_timeout=True,        # Retry automático
-    health_check_interval=30      # Verificação de saúde
-)
-```
-
-#### Integração com Endpoints
-A função `get_content_with_cache()` orquestra toda a estratégia:
-```python
-def get_content_with_cache(endpoint_name, url, params=None):
-    # 1. Tenta cache curto (5min)
+def get_content_with_cache(endpoint_name, url, cache_manager, logger, params=None):
+    # Camada 1: Cache curto prazo (5min)
     cached_response = cache_manager.get_short_cache(endpoint_name, params)
     if cached_response:
+        logger.info(f"✅ Layer 1 HIT: short-term cache for {endpoint_name}")
         return cached_response['data'], cached_response['cached']
     
-    # 2. Tenta web scraping
+    # Camada 2: Web scraping + armazenamento
     try:
         response = requests.get(url, timeout=30)
-        parsed_data = parse_html_content(response.text)
+        parsed_data = parse_html_content(response.text, logger)
         
-        # Armazena em ambos os caches
+        # Armazena em ambos os caches Redis
         cache_manager.set_short_cache(endpoint_name, parsed_data, params)
         cache_manager.set_fallback_cache(endpoint_name, parsed_data, params)
         
+        logger.info(f"✅ Fresh data fetched and cached for {endpoint_name}")
         return parsed_data, False
-    except requests.RequestException:
-        # 3. Tenta cache fallback (30d)
+        
+    except requests.RequestException as e:
+        logger.error(f"❌ Web scraping failed for {endpoint_name}: {e}")
+        
+        # Camada 2: Cache fallback Redis (30d)
         cached_response = cache_manager.get_fallback_cache(endpoint_name, params)
         if cached_response:
+            logger.warning(f"⚠️ Layer 2 HIT: fallback cache for {endpoint_name}")
             return cached_response['data'], cached_response['cached']
         
+        # Camada 3: CSV fallback (arquivos locais)
+        logger.info(f"🗂️ Attempting CSV fallback for {endpoint_name}")
+        csv_response = cache_manager.get_csv_fallback(endpoint_name, params)
+        if csv_response:
+            logger.warning(f"✅ Layer 3 HIT: CSV fallback for {endpoint_name}")
+            return csv_response, csv_response['cached']
+        
+        # Todas as camadas falharam
+        logger.critical(f"💥 ALL LAYERS FAILED for {endpoint_name}")
         return None, False
 ```
 
-#### Logging e Monitoramento
-Sistema de logs detalhado para debug e monitoramento:
-```python
-# Logs de cache hit/miss
-logger.info(f"Short cache hit for {endpoint}")
-logger.debug(f"Short cache miss for {endpoint}")
-logger.warning(f"Redis not available for cache storage")
-logger.error(f"Error retrieving from cache: {error}")
-
-# Logs de operações
-logger.info(f"Data cached (TTL: {ttl}s)")
-logger.info(f"Cleared {count} cache entries")
-```
-
-#### Variáveis de Ambiente Suportadas
+#### Variáveis de Ambiente Completas
 ```bash
 # Configuração Redis
-REDIS_HOST=localhost           # Default: localhost
-REDIS_PORT=6379               # Default: 6379
-REDIS_DB=0                    # Default: 0
-REDIS_PASSWORD=               # Default: None
+REDIS_HOST=localhost              # Default: localhost
+REDIS_PORT=6379                  # Default: 6379
+REDIS_DB=0                       # Default: 0
+REDIS_PASSWORD=                  # Default: None
 
 # Configuração Cache TTL
-SHORT_CACHE_TTL=300           # Default: 300 (5 min)
-FALLBACK_CACHE_TTL=2592000      # Default: 2592000 (30 days)
+SHORT_CACHE_TTL=300              # Default: 300 (5 min)
+FALLBACK_CACHE_TTL=2592000        # Default: 2592000 (30 dias)
 
-# Configuração Aplicação  
-LOG_LEVEL=INFO                # Default: INFO
-```
+# Configuração CSV Fallback
+CSV_FALLBACK_DIR=data/fallback    # Default: data/fallback
+CSV_CACHE_ENABLED=true            # Default: true
+CSV_MAX_CACHE_SIZE=50             # Default: 50
+CSV_CACHE_TTL=1800                # Default: 1800 (30 min)
 
-#### Métodos de Debug
-```bash
-# Via Python REPL (com aplicação rodando)
-from cache import CacheManager
-cache_manager = CacheManager()
-
-# Ver estatísticas
-stats = cache_manager.get_cache_stats()
-print(stats)
-
-# Limpar cache específico
-cache_manager.clear_cache('producao', 'short')
-cache_manager.clear_cache('exportacao', 'fallback')
-cache_manager.clear_cache(None, 'all')  # Limpa tudo
+# Configuração Aplicação
+LOG_LEVEL=INFO                    # Default: INFO
 ```
 
 ## Versionamento Automático

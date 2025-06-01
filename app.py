@@ -73,7 +73,35 @@ logger = logging.getLogger(__name__)
 app.config['SWAGGER'] = {
     'title': 'Flask Web Scraping API - Dados Vitivinícolas Embrapa',
     'uiversion': 3,
-    'description': f'API para extração de dados vitivinícolas do site da Embrapa via web scraping\n\nVersão: {VERSION_INFO["version"]}\nAmbiente: {VERSION_INFO["environment"]}\nData: {VERSION_INFO["build_date"]}',
+    'description': f'''API para extração de dados vitivinícolas do site da Embrapa via web scraping com sistema avançado de cache três camadas
+
+## Sistema de Cache Três Camadas
+
+### 🚀 Camada 1: Cache Curto Prazo (Redis) - 5 minutos
+Para respostas rápidas em requisições frequentes
+
+### 🛡️ Camada 2: Cache Fallback (Redis) - 30 dias  
+Backup para quando web scraping falha
+
+### 📁 Camada 3: Fallback CSV (Arquivos Locais)
+Última linha de defesa com dados estáticos
+
+## Estados de Cache na Resposta
+- `"cached": false` - Dados frescos via web scraping
+- `"cached": "short_term"` - Cache Redis de 5 minutos  
+- `"cached": "fallback"` - Cache Redis de 30 dias
+- `"cached": "csv_fallback"` - Dados estáticos de arquivos CSV locais
+
+## Garantia de Disponibilidade
+A API **sempre responde** mesmo quando:
+- ❌ Site da Embrapa indisponível
+- ❌ Redis indisponível  
+- ❌ Falhas de rede
+- ✅ Fallback automático para CSV local
+
+Versão: {VERSION_INFO["version"]}
+Ambiente: {VERSION_INFO["environment"]}
+Data: {VERSION_INFO["build_date"]}''',
     'version': APP_VERSION,
     'termsOfService': '',
     'contact': {
@@ -129,13 +157,13 @@ def verify_password(username, password):
 @app.route("/heartbeat", methods=["GET"])
 def heartbeat():
     """
-    Endpoint de heartbeat para monitoramento da saúde da API.
+    Endpoint de heartbeat para monitoramento da saúde da API com sistema de cache três camadas.
     ---
     tags:
       - Health Check
     responses:
       200:
-        description: API está funcionando corretamente.
+        description: API está funcionando corretamente com status completo do sistema de cache.
         schema:
           type: object
           properties:
@@ -144,37 +172,71 @@ def heartbeat():
               example: "healthy"
             timestamp:
               type: string
-              example: "2025-05-26T01:48:00Z"
+              example: "2025-01-26T01:48:00Z"
             uptime:
               type: string
               example: "API is running"
             version:
               type: string
-              example: "1.0.0.45"
-            semantic_version:
-              type: string
-              example: "1.0.0-45-g1a2b3c4"
+              example: "1.0.0"
             service:
               type: string
-              example: "Flask Web Scraping API"
-            build_info:
+              example: "Flask Web Scraping API - Dados Vitivinícolas Embrapa"
+            endpoints_available:
+              type: integer
+              example: 5
+            authentication:
+              type: string
+              example: "HTTP Basic Auth"
+            version_info:
               type: object
               properties:
-                build_number:
-                  type: integer
-                  example: 45
-                commit_hash:
+                version:
                   type: string
-                  example: "1a2b3c4"
-                branch:
-                  type: string
-                  example: "main"
-                commit_date:
-                  type: string
-                  example: "2025-01-26 10:30:00 -0300"
+                  example: "1.0.0"
                 build_date:
                   type: string
                   example: "2025-01-26T13:45:00.123456"
+                environment:
+                  type: string
+                  example: "production"
+                source:
+                  type: string
+                  example: "docker"
+            cache:
+              type: object
+              properties:
+                redis_status:
+                  type: string
+                  enum: ["connected", "disconnected"]
+                  example: "connected"
+                short_cache_ttl:
+                  type: integer
+                  example: 300
+                  description: "TTL do cache curto prazo em segundos"
+                fallback_cache_ttl:
+                  type: integer
+                  example: 2592000
+                  description: "TTL do cache fallback em segundos"
+                csv_fallback_available:
+                  type: boolean
+                  example: true
+                  description: "Indica se o sistema CSV fallback está disponível"
+                active_layers:
+                  type: array
+                  items:
+                    type: string
+                  example: ["short_term", "fallback", "csv_fallback"]
+                  description: "Camadas de cache ativas no momento"
+            docker:
+              type: object
+              properties:
+                running_in_docker:
+                  type: boolean
+                  example: true
+                container_environment:
+                  type: string
+                  example: "production"
     """
     # Check Redis connection
     redis_status = "connected" if cache_manager.redis_client and cache_manager.redis_client.ping() else "disconnected"
@@ -196,7 +258,9 @@ def heartbeat():
         "cache": {
             "redis_status": redis_status,
             "short_cache_ttl": cache_manager.short_cache_ttl,
-            "fallback_cache_ttl": cache_manager.fallback_cache_ttl
+            "fallback_cache_ttl": cache_manager.fallback_cache_ttl,
+            "csv_fallback_available": True,
+            "active_layers": ["short_term", "fallback", "csv_fallback"]
         },
         "docker": {
             "running_in_docker": os.getenv('APP_VERSION') is not None,
@@ -209,7 +273,7 @@ def heartbeat():
 @auth.login_required
 def producao():
     """
-    Busca dados de produção.
+    Busca dados de produção com sistema de cache três camadas.
     ---
     parameters:
       - name: year
@@ -227,16 +291,36 @@ def producao():
         description: A sub-opção para filtrar os dados de produção.
     responses:
       200:
-        description: Dados de produção recuperados com sucesso.
+        description: Dados de produção recuperados com sucesso através do sistema de cache três camadas.
         schema:
           type: object
           properties:
             data:
               type: object
+              description: Dados estruturados extraídos das tabelas
+              properties:
+                header:
+                  type: array
+                  description: Cabeçalhos das tabelas
+                body:
+                  type: array
+                  description: Dados principais das tabelas
+                footer:
+                  type: array
+                  description: Rodapés das tabelas (totais, somas)
             cached:
               type: string
-              enum: [false, "short_term", "fallback"]
-              description: Indica se os dados vieram do cache
+              enum: [false, "short_term", "fallback", "csv_fallback"]
+              description: Fonte dos dados (cache ou web scraping)
+              example: "short_term"
+            data_source:
+              type: string
+              description: Descrição da fonte dos dados quando CSV fallback é usado
+              example: "Local CSV files (Redis unavailable)"
+            freshness:
+              type: string
+              description: Informação sobre a atualidade dos dados
+              example: "Cached data from short-term cache (5 minutes)"
       400:
         description: Parâmetros inválidos.
         schema:
@@ -247,8 +331,15 @@ def producao():
               description: Mensagem de erro de validação
       401:
         description: Autenticação necessária.
-      500:
-        description: Erro interno do servidor.
+      503:
+        description: Serviço indisponível - todas as camadas de cache falharam.
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              description: Mensagem explicando que todas as fontes de dados falharam
+              example: "Failed to fetch data and no cache available"
     """
     return handle_producao(cache_manager, logger)
 
@@ -305,7 +396,7 @@ def processamento():
 @auth.login_required
 def comercializacao():
     """
-    Busca dados de comercialização.
+    Busca dados de comercialização com sistema de cache três camadas.
     ---
     parameters:
       - name: year
@@ -323,16 +414,17 @@ def comercializacao():
         description: A sub-opção para filtrar os dados de comercialização.
     responses:
       200:
-        description: Dados de comercialização recuperados com sucesso.
+        description: Dados de comercialização recuperados com sucesso através do sistema de cache três camadas.
         schema:
           type: object
           properties:
             data:
               type: object
+              description: Dados estruturados extraídos das tabelas
             cached:
               type: string
-              enum: [false, "short_term", "fallback"]
-              description: Indica se os dados vieram do cache
+              enum: [false, "short_term", "fallback", "csv_fallback"]
+              description: Fonte dos dados (fresh/cache Redis/CSV local)
       400:
         description: Parâmetros inválidos.
         schema:
@@ -343,8 +435,8 @@ def comercializacao():
               description: Mensagem de erro de validação
       401:
         description: Autenticação necessária.
-      500:
-        description: Erro interno do servidor.
+      503:
+        description: Serviço indisponível - todas as camadas de cache falharam.
     """
     return handle_comercializacao(cache_manager, logger)
 

@@ -177,3 +177,4 @@ tasks/
 __pycache__/
 *.pyc
 /.cursor/
+/.roo/

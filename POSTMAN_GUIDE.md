@@ -1,6 +1,6 @@
-# Guia da Collection Postman - API Flask Dados Vitivinícolas v1.1.0
+# Guia da Collection Postman - API Flask Dados Vitivinícolas v1.2.0
 
-Este guia explica como importar e usar a collection do Postman para testar a API Flask de Web Scraping com sistema de versionamento simples e validação rigorosa de parâmetros.
+Este guia explica como importar e usar a collection do Postman para testar a API Flask de Web Scraping com **sistema avançado de cache três camadas** e garantia de alta disponibilidade.
 
 ## 📥 Como Importar a Collection
 
@@ -26,7 +26,25 @@ A collection já vem com variáveis pré-configuradas:
 - `username`: `user1`
 - `password`: `password1`
 
-### 2. Funcionalidades da Versão 1.1.0
+### 2. 🚀 Novas Funcionalidades da Versão 1.2.0
+
+#### **Sistema de Cache Três Camadas**
+- ✅ **Camada 1: Cache Curto Prazo (Redis)** - 5 minutos para respostas ultra-rápidas
+- ✅ **Camada 2: Cache Fallback (Redis)** - 30 dias para backup quando web scraping falha
+- ✅ **Camada 3: Fallback CSV (Arquivos Locais)** - dados estáticos garantem funcionamento offline
+
+#### **Garantia de Alta Disponibilidade**
+- ✅ **API sempre responde** mesmo com site da Embrapa indisponível
+- ✅ **Fallback automático** entre camadas de cache
+- ✅ **Zero downtime** com degradação graceful
+
+#### **Estados de Cache Expandidos**
+- `"cached": false` - Dados frescos via web scraping ⚡
+- `"cached": "short_term"` - Cache Redis 5 minutos ⚡⚡⚡
+- `"cached": "fallback"` - Cache Redis 30 dias ⚡⚡
+- `"cached": "csv_fallback"` - Dados CSV locais ⚡⚡
+
+### 3. Funcionalidades Mantidas da v1.1.0
 - ✅ **Validação rigorosa de parâmetros**: year (1970-2024) e sub_option (listas fechadas)
 - ✅ **Sistema de versionamento simples**: baseado em arquivo version.txt
 - ✅ **Sub-opções específicas por endpoint**: cada endpoint tem suas próprias opções válidas
